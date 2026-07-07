@@ -1,0 +1,24 @@
+# Normalize line endings to LF on commit, checkout as LF on all platforms
+* text=auto eol=lf
+
+# Force these to always be LF
+*.ts    text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.env*  text eol=lf
+*.sql   text eol=lf
+*.toml  text eol=lf
+Dockerfile text eol=lf
+.husky/* text eol=lf
+
+# Binary files — never touch line endings
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
