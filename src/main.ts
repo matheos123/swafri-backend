@@ -1,61 +1,52 @@
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { AppLogger } from './common/logger/app.logger';
+import { AppLogger } from './core/logger/app.logger';
+import { AllExceptionsFilter } from './core/filter/http-exception.filter';
+import { LoggingInterceptor } from './core/interceptor/logging.interceptor';
+import { TransformInterceptor } from './core/interceptor/transform.interceptor';
 
 async function bootstrap() {
-  process.on('uncaughtException', (error) => {
-    console.error('UncaughtException:', error);
-    process.exit(1);
-  });
-
-  process.on('unhandledRejection', (reason) => {
-    console.error('UnhandledRejection:', reason);
-    process.exit(1);
-  });
-
   const app = await NestFactory.create(AppModule, {
     logger: new AppLogger(),
     bufferLogs: true,
   });
 
-  app.use(helmet());
-  app.enableCors();
+  const config = app.get(ConfigService);
+  const port = config.get<number>('app.port') ?? 3001;
+  const prefix = config.get<string>('app.prefix') ?? 'api/v1';
+  const corsOrigin = config.get<string>('app.corsOrigin') ?? 'http://localhost:3000';
+
+  app.use(helmet({ contentSecurityPolicy: false }));
+  app.enableCors({ origin: corsOrigin, credentials: true });
   app.use(compression());
-  app.setGlobalPrefix('api');
-  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
+  app.setGlobalPrefix(prefix);
   app.enableShutdownHooks();
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
-    }),
-  );
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
 
-  const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT') || 3000;
-
-  const config = new DocumentBuilder()
-    .setTitle('Web3 Battle Arena')
-    .setDescription('Backend foundation for Web3 Battle Arena')
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Web3 Battle Arena API')
+    .setDescription('Real-time Rock Paper Scissors with blockchain identity and rewards')
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup(`${prefix}/docs`, app, SwaggerModule.createDocument(app, swaggerConfig), {
+    swaggerOptions: { persistAuthorization: true },
+  });
 
   await app.listen(port);
-  console.log(`Application is running on http://localhost:${port}/api`);
+
+  const logger = new AppLogger();
+  logger.log(`Server → http://localhost:${port}/${prefix}`, 'Bootstrap');
+  logger.log(`Swagger → http://localhost:${port}/${prefix}/docs`, 'Bootstrap');
 }
 
-bootstrap().catch((error) => {
-  console.error('Bootstrap error:', error);
-  process.exit(1);
-});
+bootstrap().catch((err) => { console.error(err); process.exit(1); });

@@ -8,19 +8,118 @@ datasource db {
 }
 
 model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  username         String            @unique
+  password         String
+  avatar           String?
+  walletAddress    String?           @unique
+  wins             Int               @default(0)
+  losses           Int               @default(0)
+  totalMatches     Int               @default(0)
+  currentStreak    Int               @default(0)
+  longestStreak    Int               @default(0)
+  points           Int               @default(0)
+  refreshToken     String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  achievements     UserAchievement[]
+  sentFriendships  Friendship[]      @relation("SentFriendships")
+  receivedFriendships Friendship[]   @relation("ReceivedFriendships")
+
+  @@index([walletAddress])
+  @@index([points])
+}
+
+model Match {
+  id          String      @id @default(uuid())
+  roomId      String      @unique
+  player1Id   String
+  player2Id   String
+  winnerId    String?
+  status      MatchStatus @default(WAITING)
+  onChainHash String?
+  rounds      MatchMove[]
+  createdAt   DateTime    @default(now())
+  endedAt     DateTime?
+
+  @@index([player1Id])
+  @@index([player2Id])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model MatchMove {
   id            String   @id @default(uuid())
-  email         String   @unique
-  username      String   @unique
-  password      String
-  avatar        String?
-  walletAddress String?  @unique
-  wins          Int      @default(0)
-  losses        Int      @default(0)
-  totalMatches  Int      @default(0)
-  currentStreak Int      @default(0)
-  longestStreak Int      @default(0)
-  points        Int      @default(0)
-  refreshToken  String?
+  matchId       String
+  match         Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  roundNumber   Int
+  player1Move   String?
+  player2Move   String?
+  roundWinnerId String?
   createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+
+  @@index([matchId])
+}
+
+model Achievement {
+  id          String            @id @default(uuid())
+  name        String            @unique
+  description String
+  iconUrl     String
+  criteria    String
+  users       UserAchievement[]
+  createdAt   DateTime          @default(now())
+}
+
+model UserAchievement {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  earnedAt      DateTime    @default(now())
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+}
+
+model Friendship {
+  id          String           @id @default(uuid())
+  requesterId String
+  requester   User             @relation("SentFriendships", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId String
+  addressee   User             @relation("ReceivedFriendships", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId])
+  @@index([addresseeId])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  roomId    String
+  userId    String
+  username  String
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([roomId])
+  @@index([createdAt])
+}
+
+enum MatchStatus {
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
 }

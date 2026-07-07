@@ -41,7 +41,9 @@ dist/
 .env.production.local
 
 # Prisma
-prisma/migrations/
+# Keep migrations but ignore local dev DB
+*.db
+*.db-journal
 
 # IDEs and editors
 .vscode/
@@ -58,3 +60,7 @@ prisma/migrations/
 # Misc
 *.pem
 *.key
+
+# Next.js build and cache outputs
+.next/
+out/
