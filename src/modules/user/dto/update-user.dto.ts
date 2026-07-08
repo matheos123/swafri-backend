@@ -1,26 +1,27 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Length } from 'class-validator';
 
+/**
+ * UpdateUserDto
+ *
+ * Fields a user can change on their own profile.
+ * Role and isActive are intentionally excluded — those are admin operations.
+ * walletAddress is managed exclusively by the WalletModule.
+ */
 export class UpdateUserDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'player@arena.com' })
   @IsOptional()
   @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'player1' })
   @IsOptional()
   @IsString()
   @Length(3, 20)
   username?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/avatar.png' })
   @IsOptional()
   @IsString()
   avatar?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @Matches(/^0x[a-fA-F0-9]{40}$/, { message: 'Invalid Ethereum address' })
-  walletAddress?: string;
 }

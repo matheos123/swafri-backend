@@ -14,6 +14,9 @@ model User {
   password         String
   avatar           String?
   walletAddress    String?           @unique
+  role             Role              @default(USER)
+  isActive         Boolean           @default(true)
+  deletedAt        DateTime?         // null = active, set = soft-deleted
   wins             Int               @default(0)
   losses           Int               @default(0)
   totalMatches     Int               @default(0)
@@ -21,8 +24,6 @@ model User {
   longestStreak    Int               @default(0)
   points           Int               @default(0)
   refreshToken     String?
-  otp              String?
-  otpExpiry        DateTime?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   achievements     UserAchievement[]
@@ -31,6 +32,9 @@ model User {
 
   @@index([walletAddress])
   @@index([points])
+  @@index([role])
+  @@index([isActive])
+  @@index([deletedAt])
 }
 
 model Match {
@@ -124,4 +128,9 @@ enum FriendshipStatus {
   PENDING
   ACCEPTED
   BLOCKED
+}
+
+enum Role {
+  USER
+  ADMIN
 }

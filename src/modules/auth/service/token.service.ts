@@ -1,39 +1,38 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { Role } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
  * TokenPayload
  *
  * Shape of the decoded JWT payload used throughout the app.
- * jti (JWT ID) is included so individual tokens can be blacklisted
- * without affecting other tokens for the same user.
+ * - jti: unique ID per token, used for blacklisting
+ * - role: embedded so guards can authorise without a DB lookup
  */
 export interface TokenPayload {
-  sub: string;    // user ID
+  sub: string;
   email: string;
-  jti: string;    // unique token ID — used for blacklisting
-  iat?: number;   // issued-at  (set automatically by JwtService)
-  exp?: number;   // expires-at (set automatically by JwtService)
+  role: Role;
+  jti: string;
+  iat?: number;
+  exp?: number;
 }
 
 /**
  * ResetTokenPayload
  *
- * Shape of the short-lived password reset token.
- * Issued after a successful OTP request; consumed on password reset.
- *
+ * Short-lived token issued after a successful OTP request.
  * - purpose: narrows the token so it cannot be used as an access token
- * - otpVerified: flipped to true after the user verifies their OTP,
- *   which is required before /reset-password will accept the token
+ * - otpVerified: flipped to true after /verify-otp succeeds
  */
 export interface ResetTokenPayload {
-  sub: string;              // user ID
+  sub: string;
   email: string;
   jti: string;
   purpose: 'password-reset';
-  otpVerified: boolean;     // true once /verify-otp succeeds
+  otpVerified: boolean;
   iat?: number;
   exp?: number;
 }
@@ -45,18 +44,12 @@ export interface ResetTokenPayload {
  * - Generating access + refresh token pairs (each with a unique JTI)
  * - Generating short-lived password-reset tokens
  * - Verifying tokens (with or without expiry enforcement)
- *
- * Separation of Concerns:
- * - Knows nothing about users, passwords, or HTTP
- * - Purely responsible for JWT creation and validation
  */
 @Injectable()
 export class TokenService {
   private readonly jwtSecret: string;
   private readonly jwtRefreshSecret: string;
   private readonly jwtRefreshExpiresIn: string;
-
-  // Reset tokens are short-lived — same duration as an OTP (10 min)
   private readonly RESET_TOKEN_EXPIRES_IN = '10m';
 
   constructor(
@@ -73,17 +66,22 @@ export class TokenService {
   /**
    * Generate a fresh access + refresh token pair.
    *
-   * Each token gets its own unique JTI so they can be individually
-   * revoked without affecting the other.
+   * Role is embedded in the payload so downstream guards can authorise
+   * requests without an extra DB round-trip on every request.
    *
    * @param userId - User's unique identifier
    * @param email  - User's email address
+   * @param role   - User's current role (USER | ADMIN)
    */
-  generateTokenPair(userId: string, email: string): { accessToken: string; refreshToken: string } {
-    const basePayload = { sub: userId, email };
+  generateTokenPair(
+    userId: string,
+    email: string,
+    role: Role,
+  ): { accessToken: string; refreshToken: string } {
+    const basePayload = { sub: userId, email, role };
 
     const accessToken = this.jwtService.sign(
-      { ...basePayload, jti: uuidv4() }, // unique ID per token
+      { ...basePayload, jti: uuidv4() },
     );
 
     const refreshToken = this.jwtService.sign(
@@ -100,12 +98,6 @@ export class TokenService {
   /**
    * Generate a short-lived password-reset token.
    *
-   * Issued after a successful OTP request so the user does not need
-   * to re-submit their email on subsequent steps.
-   *
-   * Set otpVerified = false initially; the token is re-issued with
-   * otpVerified = true after the user proves they have the OTP.
-   *
    * @param userId      - User's unique identifier
    * @param email       - User's email address
    * @param otpVerified - Whether the OTP has been confirmed
@@ -119,7 +111,6 @@ export class TokenService {
       otpVerified,
     };
 
-    // Signed with the same secret as access tokens but scoped by `purpose`
     return this.jwtService.sign(payload, {
       expiresIn: this.RESET_TOKEN_EXPIRES_IN,
     });
@@ -130,11 +121,8 @@ export class TokenService {
   /**
    * Verify and decode an access token.
    *
-   * @param token           - JWT access token
+   * @param token            - JWT access token
    * @param ignoreExpiration - When true, expired tokens are still decoded
-   *                          (used by the guard to read the payload before
-   *                           attempting a silent refresh)
-   * @returns Decoded payload or null if the signature is invalid
    */
   verifyAccessToken(token: string, ignoreExpiration = false): TokenPayload | null {
     try {
@@ -151,7 +139,6 @@ export class TokenService {
    * Verify and decode a refresh token.
    *
    * @param token - JWT refresh token
-   * @returns Decoded payload or null if invalid / expired
    */
   verifyRefreshToken(token: string): TokenPayload | null {
     try {
@@ -176,7 +163,6 @@ export class TokenService {
         secret: this.jwtSecret,
       });
 
-      // Reject tokens that are not explicitly scoped to password-reset
       if (payload.purpose !== 'password-reset') return null;
 
       return payload;

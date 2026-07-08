@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import { IsEmail, IsString, Length, Matches } from 'class-validator';
 
 // ─── Shared Validation Constants ─────────────────────────────────────────────
 
@@ -35,13 +35,6 @@ export class LoginDto {
   @IsString()
   @Length(8, 128)
   password!: string;
-}
-
-export class RefreshTokenDto {
-  @ApiProperty({ description: 'Refresh token (fallback for non-browser clients)' })
-  @IsString()
-  @IsNotEmpty()
-  refreshToken!: string;
 }
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
