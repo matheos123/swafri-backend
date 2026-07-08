@@ -33,12 +33,10 @@ dist/
 # Optional npm cache directory
 .npm
 
-# dotenv environment variables
+# dotenv environment variables (keep examples tracked)
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
 # Prisma
 # Keep migrations but ignore local dev DB

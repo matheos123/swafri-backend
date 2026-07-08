@@ -15,7 +15,12 @@ export class WalletController {
   @Post('connect')
   @ApiOkResponse({ type: WalletResponseDto })
   connect(@Req() req: any, @Body() dto: WalletConnectDto) {
-    return this.walletService.connect(req.user.userId, dto.walletAddress);
+    return this.walletService.connect(
+      req.user.userId,
+      dto.walletAddress,
+      dto.message,
+      dto.signature,
+    );
   }
 
   @Post('disconnect')
