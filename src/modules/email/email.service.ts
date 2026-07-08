@@ -1,26 +1,56 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
 
 @Injectable()
 export class EmailService {
-  private transporter: Transporter;
+  private readonly logger = new Logger(EmailService.name);
+  private transporter: Transporter | null = null;
+  private useBrevoApi = false;
+  private brevoApiKey = '';
 
   constructor(private readonly config: ConfigService) {
-    this.transporter = nodemailer.createTransport({
-      host: this.config.get<string>('mail.host'),
-      port: this.config.get<number>('mail.port'),
-      secure: this.config.get<number>('mail.port') === 465, // true for 465, false for other ports
-      auth: {
-        user: this.config.get<string>('mail.user'),
-        pass: this.config.get<string>('mail.password'),
-      },
-    });
+    const mailHost = this.config.get<string>('mail.host');
+    const mailPassword = this.config.get<string>('mail.password') || '';
+    const envBrevoKey = process.env.BREVO_API_KEY || '';
+
+    if (mailPassword.startsWith('xsmtpsib-') || envBrevoKey || mailHost?.includes('brevo')) {
+      this.useBrevoApi = true;
+      this.brevoApiKey = envBrevoKey || mailPassword;
+      this.logger.log('EmailService: Using Brevo HTTP API for sending emails');
+    } else {
+      this.logger.log('EmailService: Using SMTP for sending emails');
+      this.transporter = nodemailer.createTransport({
+        host: mailHost,
+        port: this.config.get<number>('mail.port'),
+        secure: this.config.get<number>('mail.port') === 465, // true for 465, false for other ports
+        auth: {
+          user: this.config.get<string>('mail.user'),
+          pass: mailPassword,
+        },
+      });
+    }
+  }
+
+  private parseSenderInfo(): { name: string; email: string } {
+    const fromHeader = this.config.get<string>('mail.from') || 'noreply@web3arena.com';
+    let senderName = 'RPS Battle Arena';
+    let senderEmail = 'noreply@web3arena.com';
+
+    // Matches emails inside angle brackets like <info@domain.com>
+    const emailMatch = fromHeader.match(/<([^>]+)>/);
+    if (emailMatch) {
+      senderEmail = emailMatch[1].trim();
+      senderName = fromHeader.replace(emailMatch[0], '').replace(/"/g, '').trim() || senderName;
+    } else {
+      senderEmail = fromHeader.trim();
+    }
+    return { name: senderName, email: senderEmail };
   }
 
   async sendOtpEmail(to: string, otp: string): Promise<void> {
-    const from = this.config.get<string>('mail.from');
+    const sender = this.parseSenderInfo();
     const subject = 'Password Reset OTP - RPS Battle Arena';
     const html = `
       <!DOCTYPE html>
@@ -65,16 +95,21 @@ export class EmailService {
       </html>
     `;
 
-    await this.transporter.sendMail({
-      from,
-      to,
-      subject,
-      html,
-    });
+    if (this.useBrevoApi) {
+      await this.sendViaBrevoApi(sender, to, subject, html);
+    } else if (this.transporter) {
+      const fromHeader = this.config.get<string>('mail.from');
+      await this.transporter.sendMail({
+        from: fromHeader,
+        to,
+        subject,
+        html,
+      });
+    }
   }
 
   async sendPasswordChangedEmail(to: string): Promise<void> {
-    const from = this.config.get<string>('mail.from');
+    const sender = this.parseSenderInfo();
     const subject = 'Password Changed Successfully - RPS Battle Arena';
     const html = `
       <!DOCTYPE html>
@@ -117,11 +152,44 @@ export class EmailService {
       </html>
     `;
 
-    await this.transporter.sendMail({
-      from,
-      to,
-      subject,
-      html,
+    if (this.useBrevoApi) {
+      await this.sendViaBrevoApi(sender, to, subject, html);
+    } else if (this.transporter) {
+      const fromHeader = this.config.get<string>('mail.from');
+      await this.transporter.sendMail({
+        from: fromHeader,
+        to,
+        subject,
+        html,
+      });
+    }
+  }
+
+  private async sendViaBrevoApi(
+    sender: { name: string; email: string },
+    to: string,
+    subject: string,
+    htmlContent: string,
+  ): Promise<void> {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': this.brevoApiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender,
+        to: [{ email: to }],
+        subject,
+        htmlContent,
+      }),
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.logger.error(`Brevo API returned error: ${response.status} - ${errorText}`);
+      throw new Error(`Failed to send email via Brevo API: ${errorText}`);
+    }
   }
 }
