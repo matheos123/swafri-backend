@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './controller/auth.controller';
@@ -28,7 +28,7 @@ import { EmailModule } from '../email/email.module';
  * - AuthRepository: Data access layer for auth-related operations
  *
  * Dependencies:
- * - UserModule: User management operations
+ * - UserModule: User management operations (forwardRef to avoid circular dep)
  * - EmailModule: Email notifications (OTP, password changes)
  * - JwtModule: JWT token operations
  * - RedisModule: Token blacklisting (imported globally in AppModule)
@@ -43,7 +43,7 @@ import { EmailModule } from '../email/email.module';
         signOptions: { expiresIn: '15m' },
       }),
     }),
-    UserModule,
+    forwardRef(() => UserModule),
     EmailModule,
   ],
   controllers: [AuthController],
