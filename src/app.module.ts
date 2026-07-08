@@ -4,6 +4,7 @@ import * as Joi from 'joi';
 import appConfig from './core/config/index';
 import { PrismaModule } from './prisma/prisma.module';
 import { Web3Module } from './core/provider/web3.module';
+import { RedisModule } from './core/redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { WalletModule } from './modules/wallet/wallet.module';
@@ -43,6 +44,7 @@ import { HealthModule } from './modules/health/health.module';
     }),
     PrismaModule,
     Web3Module,
+    RedisModule,
     AuthModule,
     UserModule,
     WalletModule,

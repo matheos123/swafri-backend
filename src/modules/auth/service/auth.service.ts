@@ -2,16 +2,15 @@ import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/co
 import { Prisma } from '@prisma/client';
 import { AuthRepository } from '../repository/auth.repository';
 import { UserService } from '../../user/service/user.service';
-import { TokenService } from './token.service';
+import { TokenService, TokenPayload } from './token.service';
 import { PasswordService } from './password.service';
+import { RedisService } from '../../../core/redis/redis.service';
 import {
   LoginDto,
   RegisterDto,
   AuthResponseDto,
   ChangePasswordDto,
   RequestOtpDto,
-  VerifyOtpDto,
-  ResetPasswordDto,
 } from '../dto/auth.dto';
 
 /**
@@ -35,6 +34,7 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly tokenService: TokenService,
     private readonly passwordService: PasswordService,
+    private readonly redisService: RedisService,
   ) {}
 
   // ─── Helper Methods ──────────────────────────────────────────────────────
@@ -151,72 +151,47 @@ export class AuthService {
     };
   }
 
-  // ─── Refresh Token ───────────────────────────────────────────────────────
-
-  /**
-   * Generate new access and refresh tokens using valid refresh token
-   * 
-   * Flow:
-   * 1. Verify refresh token signature and expiry
-   * 2. Find user from token payload
-   * 3. Validate refresh token matches stored hash
-   * 4. Generate new token pair
-   * 5. Update stored refresh token hash
-   * 6. Return new tokens
-   * 
-   * @param token - Current refresh token
-   * @returns User object with new access and refresh tokens
-   * @throws UnauthorizedException if token is invalid or revoked
-   */
-  async refresh(token: string): Promise<AuthResponseDto> {
-    let payload: { sub: string; email: string };
-
-    try {
-      // Verify token signature and expiry
-      payload = this.tokenService.verifyRefreshToken(token);
-    } catch {
-      throw new UnauthorizedException('Invalid or expired refresh token');
-    }
-
-    // Find user from token payload
-    const user = await this.authRepository.findById(payload.sub);
-    if (!user?.refreshToken) {
-      throw new UnauthorizedException('Refresh token revoked');
-    }
-
-    // Validate refresh token matches stored hash
-    const isValid = await this.passwordService.comparePasswords(token, user.refreshToken);
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-
-    // Generate new token pair
-    const tokens = this.tokenService.generateTokenPair(user.id, user.email);
-
-    // Update stored refresh token hash
-    const hashedRefreshToken = await this.passwordService.hashPassword(tokens.refreshToken);
-    await this.authRepository.setRefreshTokenHash(user.id, hashedRefreshToken);
-
-    // Return user data without sensitive fields
-    return {
-      user: this.stripSensitiveFields(user),
-      ...tokens,
-    };
-  }
-
   // ─── Logout ──────────────────────────────────────────────────────────────
 
   /**
-   * Revoke user's refresh token
-   * 
-   * Removes stored refresh token, invalidating future refresh attempts
-   * Note: Access token remains valid until expiry
-   * 
+   * Revoke user's refresh token and blacklist both access + refresh tokens
+   *
+   * This ensures:
+   * - The refresh token in the DB is cleared
+   * - Both tokens are added to the Redis blacklist so they can't be reused
+   *   even if the attacker somehow extracted them before they expired
+   *
    * @param userId - User's unique identifier
+   * @param accessToken - Current access token (to blacklist)
+   * @param refreshToken - Current refresh token (to blacklist)
    * @returns Success message
    */
-  async logout(userId: string): Promise<{ message: string }> {
+  async logout(
+    userId: string,
+    accessToken?: string,
+    refreshToken?: string,
+  ): Promise<{ message: string }> {
+    // Clear refresh token from database
     await this.authRepository.removeRefreshToken(userId);
+
+    // Blacklist access token if provided
+    if (accessToken) {
+      const payload = this.tokenService.verifyAccessToken(accessToken, true);
+      if (payload?.jti && payload.exp) {
+        const ttlMs = (payload.exp - Math.floor(Date.now() / 1000)) * 1000;
+        await this.redisService.blacklist(payload.jti, ttlMs);
+      }
+    }
+
+    // Blacklist refresh token if provided
+    if (refreshToken) {
+      const payload = this.tokenService.verifyRefreshToken(refreshToken);
+      if (payload?.jti && payload.exp) {
+        const ttlMs = (payload.exp - Math.floor(Date.now() / 1000)) * 1000;
+        await this.redisService.blacklist(payload.jti, ttlMs);
+      }
+    }
+
     return { message: 'Logged out successfully' };
   }
 
@@ -243,26 +218,24 @@ export class AuthService {
   }
 
   /**
-   * Request password reset OTP
-   * Delegates to PasswordService
+   * Request OTP — sends email, returns a reset token to be set as cookie
    */
-  async requestPasswordReset(dto: RequestOtpDto): Promise<{ message: string }> {
+  async requestPasswordReset(dto: RequestOtpDto): Promise<{ resetToken: string }> {
     return this.passwordService.requestPasswordReset(dto);
   }
 
   /**
-   * Verify OTP for password reset
-   * Delegates to PasswordService
+   * Verify OTP — userId read from reset token cookie
+   * Returns a new reset token with otpVerified=true
    */
-  async verifyOtp(dto: VerifyOtpDto): Promise<{ message: string; verified: boolean }> {
-    return this.passwordService.verifyOtp(dto);
+  async verifyOtp(userId: string, otp: string): Promise<{ resetToken: string }> {
+    return this.passwordService.verifyOtp(userId, otp);
   }
 
   /**
-   * Reset password using OTP
-   * Delegates to PasswordService
+   * Reset password — userId read from verified reset token cookie
    */
-  async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
-    return this.passwordService.resetPassword(dto);
+  async resetPassword(userId: string, newPassword: string): Promise<{ message: string }> {
+    return this.passwordService.resetPassword(userId, newPassword);
   }
 }
