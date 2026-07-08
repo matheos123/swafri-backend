@@ -1,56 +1,46 @@
-# Multi-stage build for production
+# Improve production Dockerfile for native npm deps + Nest build tools
 FROM node:20-alpine AS builder
 
-# Install dependencies for native modules
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
+COPY nest-cli.json tsconfig.json tsconfig.build.json ./
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install all deps (including Nest CLI) for build
+RUN npm ci && npm cache clean --force
 
-# Copy source code
 COPY . .
 
-# Generate Prisma Client
 RUN npx prisma generate
-
-# Build application
 RUN npm run build
 
 # Production stage
 FROM node:20-alpine AS production
 
-# Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
 
-# Create non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
 
 WORKDIR /app
 
-# Copy built application from builder
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nestjs:nodejs /app/package*.json ./
 
-# Switch to non-root user
 USER nestjs
 
-# Expose ports
-EXPOSE 3001 3002
+ENV NODE_ENV=production
+ENV PORT=3001
 
-# Health check
+EXPOSE 3001
+
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD node -e "require('http').get('http://localhost:3001/api/v1/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3001)+'/api/v1/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
-# Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start application
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

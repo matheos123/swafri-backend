@@ -19,7 +19,13 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const port = config.get<number>('app.port') ?? 3001;
   const prefix = config.get<string>('app.prefix') ?? 'api/v1';
-  const corsOrigin = config.get<string>('app.corsOrigin') ?? 'http://localhost:3000';
+  const corsOriginRaw = config.get<string>('app.corsOrigin') ?? 'http://localhost:3000';
+  const corsOrigin = corsOriginRaw.includes(',')
+    ? corsOriginRaw
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : corsOriginRaw;
 
   app.use(helmet({ contentSecurityPolicy: false }));
   app.enableCors({ origin: corsOrigin, credentials: true });
@@ -75,11 +81,12 @@ async function bootstrap() {
     swaggerOptions: { persistAuthorization: true },
   });
 
-  await app.listen(port);
+  // Bind 0.0.0.0 so platforms like Render can reach the service
+  await app.listen(port, '0.0.0.0');
 
   const logger = new AppLogger();
-  logger.log(`Server → http://localhost:${port}/${prefix}`, 'Bootstrap');
-  logger.log(`Swagger → http://localhost:${port}/${prefix}/docs`, 'Bootstrap');
+  logger.log(`Server → http://0.0.0.0:${port}/${prefix}`, 'Bootstrap');
+  logger.log(`Swagger → /${prefix}/docs`, 'Bootstrap');
 }
 
 bootstrap().catch((err) => {

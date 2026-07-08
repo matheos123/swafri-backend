@@ -77,6 +77,18 @@ The API will be available at:
 
 `docs/API.md` covers Auth, Wallet connect, Blockchain reads, Socket.IO match play, and E2E flow for the frontend team.
 
+## Deploy on Render
+
+See **[`docs/RENDER.md`](docs/RENDER.md)** and [`render.yaml`](render.yaml).
+
+Quick settings:
+
+| Field | Value |
+|-------|--------|
+| Build Command | `npm ci --include=dev && npm run build` |
+| Start Command | `npm run render:start` |
+| Health Check | `/api/v1/health` |
+
 ## Docker Deployment
 
 ### Development
