@@ -1,9 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, Matches } from 'class-validator';
+import { IsEthereumAddress, IsString } from 'class-validator';
 
+/** Body for POST /wallet/connect — requires address + signature proving ownership */
 export class WalletConnectDto {
-  @ApiProperty({ example: '0xabc123abc123abc123abc123abc123abc123abc1' })
-  @IsString()
-  @Matches(/^0x[a-fA-F0-9]{40}$/, { message: 'Invalid Ethereum address' })
+  @ApiProperty({ example: '0xabc123abc123abc123abc123abc123abc123abc1', description: 'Ethereum wallet address' })
+  @IsEthereumAddress()
   walletAddress!: string;
+
+  @ApiProperty({ example: '0xsignature...', description: 'Signature of the challenge message from MetaMask' })
+  @IsString()
+  signature!: string;
 }

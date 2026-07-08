@@ -90,6 +90,18 @@ export class UserService {
     return this.userRepository.findByUsername(username);
   }
 
+  findByWalletAddress(walletAddress: string) {
+    return this.userRepository.findByWalletAddress(walletAddress);
+  }
+
+  /** Update wallet address and set walletVerifiedAt timestamp */
+  updateWalletVerified(id: string, walletAddress: string) {
+    return this.userRepository.update(id, {
+      walletAddress,
+      walletVerifiedAt: new Date(),
+    });
+  }
+
   // ─── Paginated List (admin) ───────────────────────────────────────────────
 
   /**

@@ -55,6 +55,27 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.client.quit();
   }
 
+  // ─── Generic Key-Value ────────────────────────────────────────────────────
+
+  /**
+   * Store any string value with a TTL in milliseconds.
+   * Used for SIWE nonces, wallet challenges, etc.
+   */
+  async set(key: string, value: string, ttlMs: number): Promise<void> {
+    const ttlSeconds = Math.ceil(ttlMs / 1000);
+    await this.client.set(key, value, 'EX', ttlSeconds);
+  }
+
+  /** Retrieve a value by key. Returns null if missing or expired. */
+  async get(key: string): Promise<string | null> {
+    return this.client.get(key);
+  }
+
+  /** Delete a key immediately. */
+  async del(key: string): Promise<void> {
+    await this.client.del(key);
+  }
+
   // ─── Token Blacklist ──────────────────────────────────────────────────────
 
   /**

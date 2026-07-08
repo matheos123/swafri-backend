@@ -70,3 +70,6 @@ coverage/
 
 # OS
 Thumbs.db
+
+#files
+BUILD_PLAN.md

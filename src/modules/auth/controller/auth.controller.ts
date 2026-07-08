@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Response, Request } from 'express';
 import { AuthService } from '../service/auth.service';
@@ -11,6 +11,7 @@ import {
   RequestOtpDto,
   VerifyOtpDto,
   ResetPasswordDto,
+  WalletVerifyDto,
 } from '../dto/auth.dto';
 import { JwtAuthGuard } from '../../../core/guard/jwt-auth.guard';
 import {
@@ -146,5 +147,41 @@ export class AuthController {
     const result = await this.authService.resetPassword(payload.sub, dto.newPassword);
     clearResetCookie(res);
     return result;
+  }
+
+  // ─── SIWE (Sign-In With Ethereum) ─────────────────────────────────────────
+
+  /**
+   * GET /auth/wallet/challenge?address=0xABC...
+   * Step 1: Generate a nonce challenge message for the wallet to sign.
+   * Client passes this message to MetaMask, gets a signature back.
+   */
+  @Get('wallet/challenge')
+  @ApiOperation({ summary: 'Get a SIWE challenge message for a wallet address' })
+  walletChallenge(@Query('address') address: string) {
+    if (!address) throw new UnauthorizedException('Wallet address is required');
+    return this.authService.generateWalletChallenge(address);
+  }
+
+  /**
+   * POST /auth/wallet/verify
+   * Step 2: Verify the wallet signature.
+   * Auto-registers a new account if wallet is new, otherwise logs in.
+   * Returns JWT pair in cookies + user object in body.
+   */
+  @Post('wallet/verify')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Verify wallet signature — login or auto-register' })
+  @ApiOkResponse({ type: AuthResponseDto })
+  async walletVerify(
+    @Body() dto: WalletVerifyDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { accessToken, refreshToken, user } = await this.authService.verifyWalletSignature(
+      dto.address,
+      dto.signature,
+    );
+    setAuthCookies(res, accessToken, refreshToken);
+    return { user };
   }
 }

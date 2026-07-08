@@ -25,6 +25,8 @@ model User {
   longestStreak    Int               @default(0)
   points           Int               @default(0)
   refreshToken     String?
+  blockchainProfileId String?
+  walletVerifiedAt DateTime?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   achievements     UserAchievement[]
@@ -43,6 +45,7 @@ model Match {
   roomId      String      @unique
   player1Id   String
   player2Id   String
+  isRanked    Boolean   @default(false)
   winnerId    String?
   status      MatchStatus @default(WAITING)
   onChainHash String?
@@ -118,6 +121,20 @@ model ChatMessage {
   @@index([createdAt])
 }
 
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  message   String
+  data      Json?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([read])
+}
+
+
 enum MatchStatus {
   WAITING
   IN_PROGRESS
@@ -134,4 +151,12 @@ enum FriendshipStatus {
 enum Role {
   USER
   ADMIN
+}
+
+enum NotificationType {
+  FRIEND_REQUEST
+  FRIEND_ACCEPTED
+  GAME_INVITE
+  ACHIEVEMENT_EARNED
+  MATCH_FOUND
 }

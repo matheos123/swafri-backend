@@ -1,10 +1,12 @@
 import { ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { ethers } from 'ethers';
 import { AuthRepository } from '../repository/auth.repository';
 import { UserService } from '../../user/service/user.service';
 import { TokenService } from './token.service';
 import { PasswordService } from './password.service';
 import { RedisService } from '../../../core/redis/redis.service';
+import { Web3Provider } from '../../../core/provider/web3.provider';
 import {
   LoginDto,
   RegisterDto,
@@ -35,6 +37,7 @@ export class AuthService {
     private readonly tokenService: TokenService,
     private readonly passwordService: PasswordService,
     private readonly redisService: RedisService,
+    private readonly web3: Web3Provider,
   ) {}
 
   // ─── Helper Methods ──────────────────────────────────────────────────────
@@ -84,11 +87,17 @@ export class AuthService {
       // Hash password before storing
       const hashedPassword = await this.passwordService.hashPassword(dto.password);
 
+      // Generate deterministic blockchain profile ID
+      const blockchainProfileId = ethers.keccak256(
+        ethers.toUtf8Bytes(`${dto.email}:${dto.username}:${Date.now()}`),
+      );
+
       // Create user in database
       const user = await this.userService.create({
         email: dto.email,
         username: dto.username,
         password: hashedPassword,
+        blockchainProfileId,
       });
 
       // Generate JWT tokens (role embedded so guards skip DB lookup)
@@ -244,5 +253,109 @@ export class AuthService {
    */
   async resetPassword(userId: string, newPassword: string): Promise<{ message: string }> {
     return this.passwordService.resetPassword(userId, newPassword);
+  }
+
+  // ─── SIWE (Sign-In With Ethereum) ─────────────────────────────────────────
+
+  /**
+   * Generate a nonce challenge message for the wallet to sign.
+   * Stored in Redis for 5 minutes keyed by wallet address (lowercased).
+   *
+   * @param address - Ethereum wallet address
+   * @returns Human-readable message for MetaMask to sign
+   */
+  async generateWalletChallenge(address: string): Promise<{ message: string; nonce: string }> {
+    const nonce     = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const issuedAt  = new Date().toISOString();
+
+    const message = [
+      'Web3 Battle Arena wants you to sign in.',
+      '',
+      `Wallet: ${address}`,
+      `Nonce: ${nonce}`,
+      `Issued At: ${issuedAt}`,
+      `Chain ID: 84532 (Base Sepolia)`,
+    ].join('\n');
+
+    // Store nonce keyed by lowercased address, TTL 5 minutes
+    await this.redisService.set(`siwe:${address.toLowerCase()}`, `${nonce}::${message}`, 5 * 60 * 1000);
+
+    return { message, nonce };
+  }
+
+  /**
+   * Verify a signed SIWE challenge.
+   *
+   * Flow:
+   * 1. Retrieve stored message from Redis
+   * 2. Verify the signature against the stored message
+   * 3. Consume the nonce (prevent replay)
+   * 4. If wallet is new → auto-register account
+   *    If wallet exists → login
+   * 5. Return JWT pair
+   *
+   * @param address   - Ethereum wallet address
+   * @param signature - Signed message from MetaMask
+   */
+  async verifyWalletSignature(
+    address: string,
+    signature: string,
+  ): Promise<AuthResponseDto & { accessToken: string; refreshToken: string }> {
+    const normalizedAddress = address.toLowerCase();
+    const stored = await this.redisService.get(`siwe:${normalizedAddress}`);
+
+    if (!stored) {
+      throw new UnauthorizedException('Challenge expired or not found. Request a new challenge.');
+    }
+
+    // Extract stored message (format: "NONCE::full message")
+    const colonIndex = stored.indexOf('::');
+    const storedMessage = stored.substring(colonIndex + 2);
+
+    // Verify the signature
+    const isValid = this.web3.verifyWalletSignature(storedMessage, signature, address);
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid wallet signature');
+    }
+
+    // Consume the nonce — one use only
+    await this.redisService.del(`siwe:${normalizedAddress}`);
+
+    // Check if wallet already has an account
+    let user = await this.userService.findByWalletAddress(address);
+
+    if (!user) {
+      // Auto-register: generate a profile ID and username from the wallet address
+      const blockchainProfileId = ethers.keccak256(
+        ethers.toUtf8Bytes(`${address}:${Date.now()}`),
+      );
+      const autoUsername = `Player_${address.slice(2, 8).toUpperCase()}`;
+      const randomPassword = ethers.hexlify(ethers.randomBytes(32));
+      const hashedPassword  = await this.passwordService.hashPassword(randomPassword);
+
+      user = await this.userService.create({
+        email:               `${normalizedAddress}@wallet.local`,
+        username:            autoUsername,
+        password:            hashedPassword,
+        walletAddress:       address,
+        walletVerifiedAt:    new Date(),
+        blockchainProfileId,
+      });
+    } else {
+      // Existing user — refresh wallet verification timestamp
+      await this.userService.updateWalletVerified(user.id, address);
+      // Re-fetch to get updated fields
+      user = (await this.userService.findByWalletAddress(address))!;
+    }
+
+    const tokens = this.tokenService.generateTokenPair(user.id, user.email, user.role);
+    const hashedRefreshToken = await this.passwordService.hashPassword(tokens.refreshToken);
+    await this.authRepository.setRefreshTokenHash(user.id, hashedRefreshToken);
+
+    return {
+      user: this.stripSensitiveFields(user),
+      accessToken:  tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    };
   }
 }
