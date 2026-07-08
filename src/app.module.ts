@@ -16,6 +16,7 @@ import { ReplayModule } from './modules/replay/replay.module';
 import { FriendModule } from './modules/friend/friend.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { HealthModule } from './modules/health/health.module';
+import { BlockchainModule } from './modules/blockchain/blockchain.module';
 
 @Module({
   imports: [
@@ -34,6 +35,9 @@ import { HealthModule } from './modules/health/health.module';
         SOCKET_CORS_ORIGIN: Joi.string().default('http://localhost:3000'),
         BLOCKCHAIN_RPC_URL: Joi.string().optional(),
         PRIVATE_KEY: Joi.string().optional(),
+        CHAIN_ID: Joi.number().optional(),
+        BLOCKCHAIN_CHAIN_ID: Joi.number().optional(),
+        GAME_REWARD_ADDRESS: Joi.string().optional(),
         BATTLE_ARENA_ADDRESS: Joi.string().optional(),
         ACHIEVEMENT_NFT_ADDRESS: Joi.string().optional(),
         ARENA_TOKEN_ADDRESS: Joi.string().optional(),
@@ -55,6 +59,7 @@ import { HealthModule } from './modules/health/health.module';
     FriendModule,
     NotificationModule,
     HealthModule,
+    BlockchainModule,
   ],
 })
 export class AppModule {}

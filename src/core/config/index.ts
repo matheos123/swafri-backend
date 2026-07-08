@@ -25,7 +25,8 @@ export default () => ({
   blockchain: {
     rpcUrl: process.env.BLOCKCHAIN_RPC_URL,
     privateKey: process.env.PRIVATE_KEY,
-    chainId: parseInt(process.env.BLOCKCHAIN_CHAIN_ID ?? '84532', 10),
+    chainId: parseInt(process.env.CHAIN_ID ?? process.env.BLOCKCHAIN_CHAIN_ID ?? '80002', 10),
+    gameRewardAddress: process.env.GAME_REWARD_ADDRESS,
     contracts: {
       battleArena: process.env.BATTLE_ARENA_ADDRESS,
       achievementNft: process.env.ACHIEVEMENT_NFT_ADDRESS,

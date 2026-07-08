@@ -20,6 +20,7 @@ model User {
   currentStreak    Int               @default(0)
   longestStreak    Int               @default(0)
   points           Int               @default(0)
+  onChainPoints    Int               @default(0)
   refreshToken     String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -37,9 +38,12 @@ model Match {
   player1Id   String
   player2Id   String
   winnerId    String?
-  status      MatchStatus @default(WAITING)
-  onChainHash String?
-  rounds      MatchMove[]
+  status         MatchStatus    @default(WAITING)
+  onChainHash    String?
+  onChainTxHash  String?
+  onChainStatus  OnChainStatus  @default(PENDING)
+  verifiedAt     DateTime?
+  rounds         MatchMove[]
   createdAt   DateTime    @default(now())
   endedAt     DateTime?
 
@@ -116,6 +120,13 @@ enum MatchStatus {
   IN_PROGRESS
   COMPLETED
   ABANDONED
+}
+
+enum OnChainStatus {
+  PENDING
+  SUBMITTED
+  CONFIRMED
+  FAILED
 }
 
 enum FriendshipStatus {
