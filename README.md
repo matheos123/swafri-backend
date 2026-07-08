@@ -8,7 +8,7 @@ Real-time multiplayer Rock Paper Scissors arena with blockchain-based identity a
 - **Database:** PostgreSQL 16 (via Prisma ORM)
 - **Cache/Queue:** Redis 7 + BullMQ
 - **Real-time:** Socket.IO 4
-- **Blockchain:** Ethers.js 6 (Base Sepolia)
+- **Blockchain:** Ethers.js 6 (Polygon Amoy)
 - **Auth:** JWT (access + refresh tokens)
 - **API Docs:** Swagger/OpenAPI
 
@@ -62,9 +62,20 @@ npm run start:dev
 
 The API will be available at:
 - REST API: http://localhost:3001/api/v1
-- WebSocket: http://localhost:3002
-- API Docs: http://localhost:3001/api/v1/docs
+- WebSocket (Socket.IO): http://localhost:3001
+- Swagger UI: http://localhost:3001/api/v1/docs
+- Full written API docs: [`docs/API.md`](docs/API.md)
 - Health Check: http://localhost:3001/api/v1/health
+
+## API Documentation
+
+| Resource | Location |
+|----------|----------|
+| **Swagger / OpenAPI (interactive)** | http://localhost:3001/api/v1/docs |
+| **OpenAPI JSON** | http://localhost:3001/api/v1/docs-json |
+| **Full written docs (FE handoff)** | [`docs/API.md`](docs/API.md) |
+
+`docs/API.md` covers Auth, Wallet connect, Blockchain reads, Socket.IO match play, and E2E flow for the frontend team.
 
 ## Docker Deployment
 
@@ -144,12 +155,6 @@ prisma/
 
 ```
 
-## API Documentation
-
-Once the server is running, visit:
-- **Swagger UI:** http://localhost:3001/api/v1/docs
-- **OpenAPI JSON:** http://localhost:3001/api/v1/docs-json
-
 ## Environment Variables
 
 See `.env.example` for all required environment variables.
@@ -159,7 +164,10 @@ See `.env.example` for all required environment variables.
 ```env
 DATABASE_URL=postgresql://postgres:password@localhost:5432/web3_arena
 JWT_SECRET=your-secret-here
-BLOCKCHAIN_RPC_URL=https://sepolia.base.org
+BLOCKCHAIN_RPC_URL=https://rpc-amoy.polygon.technology
+CHAIN_ID=80002
+GAME_REWARD_ADDRESS=0xc6B4Edae0666e59f6475079A58d97483A1fd0d42
+PRIVATE_KEY=
 REDIS_HOST=localhost
 ```
 
