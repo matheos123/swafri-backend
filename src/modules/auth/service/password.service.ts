@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { randomInt } from 'crypto';
 import { hash, compare } from 'bcrypt';
 import { AuthRepository } from '../repository/auth.repository';
@@ -23,6 +23,7 @@ import { ChangePasswordDto, RequestOtpDto, VerifyOtpDto, ResetPasswordDto } from
  */
 @Injectable()
 export class PasswordService {
+  private readonly logger       = new Logger(PasswordService.name);
   private readonly SALT_ROUNDS    = 10;
   private readonly OTP_TTL_SECONDS = 600; // 10 minutes
 
@@ -59,7 +60,13 @@ export class PasswordService {
     if (!valid) throw new UnauthorizedException('Current password is incorrect');
 
     await this.authRepository.updatePassword(userId, await this.hashPassword(dto.newPassword));
-    await this.emailService.sendPasswordChangedEmail(user.email);
+
+    try {
+      await this.emailService.sendPasswordChangedEmail(user.email);
+    } catch (err) {
+      this.logger.error(`Failed to send password-changed email to ${user.email}`, err);
+      // Non-fatal — password was changed successfully
+    }
 
     return { message: 'Password changed successfully' };
   }
@@ -88,8 +95,13 @@ export class PasswordService {
     // Store hashed OTP in Redis — auto-expires after TTL
     await this.redisService.setOtp(user.id, otp, this.OTP_TTL_SECONDS);
 
-    // Send plain OTP to user
-    await this.emailService.sendOtpEmail(user.email, otp);
+    // Send plain OTP to user — log error but don't crash the request
+    try {
+      await this.emailService.sendOtpEmail(user.email, otp);
+    } catch (err) {
+      this.logger.error(`Failed to send OTP email to ${user.email}`, err);
+      throw new BadRequestException('Failed to send OTP email. Check SMTP configuration.');
+    }
 
     const resetToken = this.tokenService.generateResetToken(user.id, user.email, false);
     return { resetToken };
@@ -139,7 +151,13 @@ export class PasswordService {
     // Delete OTP after use to prevent replay
     await this.redisService.deleteOtp(userId);
 
-    await this.emailService.sendPasswordChangedEmail(user.email);
+    try {
+      await this.emailService.sendPasswordChangedEmail(user.email);
+    } catch (err) {
+      this.logger.error(`Failed to send password-changed email to ${user.email}`, err);
+      // Non-fatal — password was reset successfully
+    }
+
     return { message: 'Password reset successfully' };
   }
 }

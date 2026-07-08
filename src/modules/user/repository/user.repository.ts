@@ -87,6 +87,16 @@ export class UserRepository {
     });
   }
 
+  /**
+   * Find a user by wallet address.
+   * Excludes soft-deleted users.
+   */
+  findByWalletAddress(walletAddress: string): Promise<User | null> {
+    return this.prisma.user.findFirst({
+      where: { walletAddress, deletedAt: null },
+    });
+  }
+
   // ─── Read (paginated list) ────────────────────────────────────────────────
 
   /**

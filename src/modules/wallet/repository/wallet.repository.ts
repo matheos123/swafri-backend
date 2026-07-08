@@ -10,6 +10,18 @@ export class WalletRepository {
     return this.prisma.user.update({ where: { id: userId }, data: { walletAddress } });
   }
 
+  /** Connect wallet with cryptographic proof — sets walletVerifiedAt and blockchainProfileId */
+  connectVerified(userId: string, walletAddress: string, blockchainProfileId: string): Promise<User> {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        walletAddress,
+        walletVerifiedAt:    new Date(),
+        blockchainProfileId,
+      },
+    });
+  }
+
   disconnect(userId: string): Promise<User> {
     return this.prisma.user.update({ where: { id: userId }, data: { walletAddress: null } });
   }

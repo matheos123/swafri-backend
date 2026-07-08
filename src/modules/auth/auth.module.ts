@@ -9,6 +9,7 @@ import { AuthRepository } from './repository/auth.repository';
 import { JwtAuthGuard } from '../../core/guard/jwt-auth.guard';
 import { UserModule } from '../user/user.module';
 import { EmailModule } from '../email/email.module';
+import { Web3Provider } from '../../core/provider/web3.provider';
 
 /**
  * AuthModule
@@ -60,6 +61,9 @@ import { EmailModule } from '../email/email.module';
 
     // Custom guard (replaces PassportModule)
     JwtAuthGuard,
+
+    // Web3 — needed for SIWE signature verification
+    Web3Provider,
   ],
   exports: [
     // Exported so the guard can inject them

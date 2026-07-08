@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, Length, Matches } from 'class-validator';
+import { IsEmail, IsString, Length, Matches, IsEthereumAddress } from 'class-validator';
 
 // ─── Shared Validation Constants ─────────────────────────────────────────────
 
@@ -83,4 +83,24 @@ export class ResetPasswordDto {
   @Length(8, 128)
   @Matches(PASSWORD_REGEX, { message: PASSWORD_REGEX_MSG })
   newPassword!: string;
+}
+
+// ─── SIWE DTOs ────────────────────────────────────────────────────────────────
+
+/** GET /auth/wallet/challenge?address=0x... */
+export class WalletChallengeQueryDto {
+  @ApiProperty({ example: '0xABC123...', description: 'Ethereum wallet address' })
+  @IsEthereumAddress()
+  address!: string;
+}
+
+/** POST /auth/wallet/verify */
+export class WalletVerifyDto {
+  @ApiProperty({ example: '0xABC123...', description: 'Ethereum wallet address' })
+  @IsEthereumAddress()
+  address!: string;
+
+  @ApiProperty({ example: '0xsignature...', description: 'Signed challenge message from MetaMask' })
+  @IsString()
+  signature!: string;
 }
