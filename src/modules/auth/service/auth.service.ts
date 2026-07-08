@@ -69,7 +69,7 @@ export class AuthService {
    * @returns User object with access and refresh tokens
    * @throws ConflictException if email or username already exists
    */
-  async register(dto: RegisterDto): Promise<AuthResponseDto> {
+  async register(dto: RegisterDto): Promise<AuthResponseDto & { accessToken: string; refreshToken: string }> {
     // Check if email already exists
     if (await this.userService.findByEmail(dto.email)) {
       throw new ConflictException('Email already in use');
@@ -98,10 +98,11 @@ export class AuthService {
       const hashedRefreshToken = await this.passwordService.hashPassword(tokens.refreshToken);
       await this.authRepository.setRefreshTokenHash(user.id, hashedRefreshToken);
 
-      // Return user data without sensitive fields
+      // Return user data without sensitive fields (tokens only used internally by controller for cookies)
       return {
         user: this.stripSensitiveFields(user),
-        ...tokens,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       };
     } catch (err) {
       // Handle unique constraint violations from Prisma
@@ -128,7 +129,7 @@ export class AuthService {
    * @returns User object with access and refresh tokens
    * @throws UnauthorizedException if credentials are invalid
    */
-  async login(dto: LoginDto): Promise<AuthResponseDto> {
+  async login(dto: LoginDto): Promise<AuthResponseDto & { accessToken: string; refreshToken: string }> {
     // Find user by email
     const user = await this.userService.findByEmail(dto.email);
 
@@ -149,10 +150,11 @@ export class AuthService {
     const hashedRefreshToken = await this.passwordService.hashPassword(tokens.refreshToken);
     await this.authRepository.setRefreshTokenHash(user.id, hashedRefreshToken);
 
-    // Return user data without sensitive fields
+    // Return user data without sensitive fields (tokens only used internally by controller for cookies)
     return {
       user: this.stripSensitiveFields(user),
-      ...tokens,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     };
   }
 

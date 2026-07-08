@@ -39,15 +39,10 @@ export class LoginDto {
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
 
+/** What the HTTP response body contains — tokens are in httpOnly cookies, not here */
 export class AuthResponseDto {
   @ApiProperty({ type: () => Object, description: 'User profile without sensitive fields' })
   user!: Record<string, unknown>;
-
-  @ApiProperty({ description: 'Short-lived access token (15 min)' })
-  accessToken!: string;
-
-  @ApiProperty({ description: 'Long-lived refresh token (7 days)' })
-  refreshToken!: string;
 }
 
 // ─── Password Management DTOs ─────────────────────────────────────────────────
