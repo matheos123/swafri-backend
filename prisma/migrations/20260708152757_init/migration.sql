@@ -4,6 +4,9 @@ CREATE TYPE "MatchStatus" AS ENUM ('WAITING', 'IN_PROGRESS', 'COMPLETED', 'ABAND
 -- CreateEnum
 CREATE TYPE "FriendshipStatus" AS ENUM ('PENDING', 'ACCEPTED', 'BLOCKED');
 
+-- CreateEnum
+CREATE TYPE "Role" AS ENUM ('USER', 'ADMIN');
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -12,6 +15,9 @@ CREATE TABLE "User" (
     "password" TEXT NOT NULL,
     "avatar" TEXT,
     "walletAddress" TEXT,
+    "role" "Role" NOT NULL DEFAULT 'USER',
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "deletedAt" TIMESTAMP(3),
     "wins" INTEGER NOT NULL DEFAULT 0,
     "losses" INTEGER NOT NULL DEFAULT 0,
     "totalMatches" INTEGER NOT NULL DEFAULT 0,
@@ -113,6 +119,15 @@ CREATE INDEX "User_walletAddress_idx" ON "User"("walletAddress");
 
 -- CreateIndex
 CREATE INDEX "User_points_idx" ON "User"("points");
+
+-- CreateIndex
+CREATE INDEX "User_role_idx" ON "User"("role");
+
+-- CreateIndex
+CREATE INDEX "User_isActive_idx" ON "User"("isActive");
+
+-- CreateIndex
+CREATE INDEX "User_deletedAt_idx" ON "User"("deletedAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Match_roomId_key" ON "Match"("roomId");

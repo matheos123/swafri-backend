@@ -34,9 +34,9 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user' })
   @ApiOkResponse({ type: AuthResponseDto })
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.register(dto);
-    setAuthCookies(res, result.accessToken, result.refreshToken);
-    return result;
+    const { accessToken, refreshToken, user } = await this.authService.register(dto);
+    setAuthCookies(res, accessToken, refreshToken);
+    return { user };
   }
 
   // ─── Login ───────────────────────────────────────────────────────────────
@@ -45,9 +45,9 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiOkResponse({ type: AuthResponseDto })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.login(dto);
-    setAuthCookies(res, result.accessToken, result.refreshToken);
-    return result;
+    const { accessToken, refreshToken, user } = await this.authService.login(dto);
+    setAuthCookies(res, accessToken, refreshToken);
+    return { user };
   }
 
   // ─── Logout ──────────────────────────────────────────────────────────────
