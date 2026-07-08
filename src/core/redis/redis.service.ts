@@ -30,15 +30,22 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
   onModuleInit() {
-    this.client = new Redis({
-      host: this.config.get<string>('redis.host') ?? 'localhost',
-      port: this.config.get<number>('redis.port') ?? 6379,
-      ...(this.config.get<string>('redis.password')
-        ? { password: this.config.get<string>('redis.password') }
-        : {}),
-      db: this.config.get<number>('redis.db') ?? 0,
-      retryStrategy: (times) => (times > 3 ? null : times * 500),
-    });
+    const redisUrl = this.config.get<string>('redis.url');
+
+    this.client = redisUrl
+      ? new Redis(redisUrl, {
+          retryStrategy: (times) => (times > 3 ? null : times * 500),
+          tls: redisUrl.startsWith('rediss://') ? {} : undefined,
+        })
+      : new Redis({
+          host: this.config.get<string>('redis.host') ?? 'localhost',
+          port: this.config.get<number>('redis.port') ?? 6379,
+          ...(this.config.get<string>('redis.password')
+            ? { password: this.config.get<string>('redis.password') }
+            : {}),
+          db: this.config.get<number>('redis.db') ?? 0,
+          retryStrategy: (times) => (times > 3 ? null : times * 500),
+        });
 
     this.client.on('connect', () => this.logger.log('Redis connected'));
     this.client.on('error',   (err) => this.logger.error('Redis error', err.message));
