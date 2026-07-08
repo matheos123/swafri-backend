@@ -1,8 +1,8 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuthRepository } from '../repository/auth.repository';
 import { UserService } from '../../user/service/user.service';
-import { TokenService, TokenPayload } from './token.service';
+import { TokenService } from './token.service';
 import { PasswordService } from './password.service';
 import { RedisService } from '../../../core/redis/redis.service';
 import {
@@ -91,8 +91,8 @@ export class AuthService {
         password: hashedPassword,
       });
 
-      // Generate JWT tokens
-      const tokens = this.tokenService.generateTokenPair(user.id, user.email);
+      // Generate JWT tokens (role embedded so guards skip DB lookup)
+      const tokens = this.tokenService.generateTokenPair(user.id, user.email, user.role);
 
       // Store hashed refresh token for security
       const hashedRefreshToken = await this.passwordService.hashPassword(tokens.refreshToken);
@@ -137,8 +137,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Generate JWT tokens
-    const tokens = this.tokenService.generateTokenPair(user.id, user.email);
+    // Reject login for deactivated accounts (403 not 401 — credentials are valid)
+    if (!user.isActive) {
+      throw new ForbiddenException('Account is deactivated');
+    }
+
+    // Generate JWT tokens (role embedded)
+    const tokens = this.tokenService.generateTokenPair(user.id, user.email, user.role);
 
     // Store hashed refresh token
     const hashedRefreshToken = await this.passwordService.hashPassword(tokens.refreshToken);

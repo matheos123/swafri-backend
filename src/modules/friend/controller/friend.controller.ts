@@ -13,23 +13,23 @@ export class FriendController {
   constructor(private readonly friendService: FriendService) {}
 
   @Post('request')
-  sendRequest(@CurrentUser('sub') userId: string, @Body() dto: SendFriendRequestDto) {
+  sendRequest(@CurrentUser('userId') userId: string, @Body() dto: SendFriendRequestDto) {
     return this.friendService.sendRequest(userId, dto.addresseeId);
   }
 
   @Patch('respond')
-  respond(@CurrentUser('sub') userId: string, @Body() dto: RespondFriendRequestDto) {
+  respond(@CurrentUser('userId') userId: string, @Body() dto: RespondFriendRequestDto) {
     return this.friendService.respond(userId, dto.friendshipId, dto.action);
   }
 
   @Get()
-  getFriends(@CurrentUser('sub') userId: string) { return this.friendService.getFriends(userId); }
+  getFriends(@CurrentUser('userId') userId: string) { return this.friendService.getFriends(userId); }
 
   @Get('requests')
-  getRequests(@CurrentUser('sub') userId: string) { return this.friendService.getPendingRequests(userId); }
+  getRequests(@CurrentUser('userId') userId: string) { return this.friendService.getPendingRequests(userId); }
 
   @Delete(':friendId')
-  remove(@CurrentUser('sub') userId: string, @Param('friendId') friendId: string) {
+  remove(@CurrentUser('userId') userId: string, @Param('friendId') friendId: string) {
     return this.friendService.removeFriend(userId, friendId);
   }
 }
