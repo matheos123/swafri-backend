@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { AppLogger } from './core/logger/app.logger';
 import { AllExceptionsFilter } from './core/filter/http-exception.filter';
@@ -24,6 +25,7 @@ async function bootstrap() {
   app.use(helmet({ contentSecurityPolicy: false }));
   app.enableCors({ origin: corsOrigin, credentials: true });
   app.use(compression());
+  app.use(cookieParser());
   app.setGlobalPrefix(prefix);
   app.enableShutdownHooks();
 

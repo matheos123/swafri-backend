@@ -21,6 +21,8 @@ model User {
   longestStreak    Int               @default(0)
   points           Int               @default(0)
   refreshToken     String?
+  otp              String?
+  otpExpiry        DateTime?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   achievements     UserAchievement[]
