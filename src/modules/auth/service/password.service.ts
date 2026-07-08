@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException, UnauthorizedExcepti
 import { hash, compare } from 'bcrypt';
 import { AuthRepository } from '../repository/auth.repository';
 import { EmailService } from '../../email/email.service';
+import { TokenService } from './token.service';
 import {
   ChangePasswordDto,
   RequestOtpDto,
@@ -32,6 +33,7 @@ export class PasswordService {
   constructor(
     private readonly authRepository: AuthRepository,
     private readonly emailService: EmailService,
+    private readonly tokenService: TokenService,
   ) {}
 
   // ─── Password Hashing & Validation ───────────────────────────────────────
@@ -101,25 +103,23 @@ export class PasswordService {
   // ─── OTP-Based Password Reset Flow ───────────────────────────────────────
 
   /**
-   * Generate and send OTP for password reset
-   * 
-   * Security considerations:
-   * - Doesn't reveal if email exists (prevents user enumeration)
-   * - OTP is 6 digits for user convenience
-   * - OTP expires after configured time period
-   * - OTP is stored hashed in database
-   * 
+   * Generate and send OTP for password reset, return a reset token
+   *
+   * Flow:
+   * 1. Check if the email exists (prevents enumeration with a generic message)
+   * 2. Generate a 6-digit OTP and store it with expiry
+   * 3. Send OTP via email
+   * 4. Return a short-lived reset token (JWT, 10 min) that carries userId + email
+   *
    * @param dto - Contains user's email
-   * @returns Generic success message (doesn't reveal if email exists)
+   * @returns reset token (JWT) to be set as a cookie by the controller
+   * @throws NotFoundException if the email doesn't exist
    */
-  async requestPasswordReset(dto: RequestOtpDto): Promise<{ message: string }> {
+  async requestPasswordReset(dto: RequestOtpDto): Promise<{ resetToken: string }> {
     const user = await this.authRepository.findByEmail(dto.email);
 
-    // Generic message to prevent user enumeration attack
-    const genericMessage = 'If the email exists, an OTP has been sent';
-
     if (!user) {
-      return { message: genericMessage };
+      throw new NotFoundException('Email not found');
     }
 
     // Generate 6-digit OTP
@@ -132,20 +132,26 @@ export class PasswordService {
     // Send OTP via email
     await this.emailService.sendOtpEmail(user.email, otp);
 
-    return { message: genericMessage };
+    // Issue a reset token (10 min) — otpVerified=false until user proves OTP
+    const resetToken = this.tokenService.generateResetToken(user.id, user.email, false);
+    return { resetToken };
   }
 
   /**
-   * Verify OTP without resetting password
-   * 
-   * Allows frontend to validate OTP before showing password reset form
-   * 
-   * @param dto - Contains email and OTP to verify
-   * @returns Verification status
-   * @throws BadRequestException if OTP is invalid or expired
+   * Verify the OTP without resetting the password
+   *
+   * The reset token (from cookie) provides userId + email, so the client
+   * only needs to send the OTP itself.
+   *
+   * If valid, returns a new reset token with `otpVerified: true`.
+   *
+   * @param userId - Extracted from reset token cookie
+   * @param otp    - The 6-digit code the user received via email
+   * @returns New reset token with otpVerified=true to be set as a cookie
+   * @throws BadRequestException if the OTP is invalid or expired
    */
-  async verifyOtp(dto: VerifyOtpDto): Promise<{ message: string; verified: boolean }> {
-    const user = await this.authRepository.findByEmail(dto.email);
+  async verifyOtp(userId: string, otp: string): Promise<{ resetToken: string }> {
+    const user = await this.authRepository.findById(userId);
 
     // Validate OTP exists and hasn't expired
     if (!user || !user.otp || !user.otpExpiry) {
@@ -153,7 +159,7 @@ export class PasswordService {
     }
 
     // Verify OTP matches
-    if (user.otp !== dto.otp) {
+    if (user.otp !== otp) {
       throw new BadRequestException('Invalid or expired OTP');
     }
 
@@ -163,44 +169,38 @@ export class PasswordService {
       throw new BadRequestException('Invalid or expired OTP');
     }
 
-    return { message: 'OTP verified successfully', verified: true };
+    // OTP is valid — re-issue reset token with otpVerified = true
+    const resetToken = this.tokenService.generateResetToken(user.id, user.email, true);
+    return { resetToken };
   }
 
   /**
-   * Reset password using verified OTP
-   * 
-   * Flow:
-   * 1. Verify OTP is valid
-   * 2. Hash new password
-   * 3. Update password
-   * 4. Clear OTP from database
-   * 5. Send confirmation email
-   * 
-   * @param dto - Contains email, OTP, and new password
+   * Reset the password using a verified reset token
+   *
+   * The reset token must have `otpVerified: true` or this will fail.
+   * The client only needs to send the new password; userId + OTP state
+   * are carried in the reset token cookie.
+   *
+   * @param userId      - Extracted from reset token
+   * @param newPassword - New password to set
    * @returns Success message
-   * @throws BadRequestException if OTP is invalid or expired
+   * @throws BadRequestException if OTP verification is missing or OTP expired
    */
-  async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
-    const user = await this.authRepository.findByEmail(dto.email);
+  async resetPassword(userId: string, newPassword: string): Promise<{ message: string }> {
+    const user = await this.authRepository.findById(userId);
 
-    // Validate OTP exists and user exists
+    // Final check: OTP must still be present and valid (hasn't been cleared or expired)
     if (!user || !user.otp || !user.otpExpiry) {
-      throw new BadRequestException('Invalid or expired OTP');
+      throw new BadRequestException('OTP session expired');
     }
 
-    // Verify OTP matches
-    if (user.otp !== dto.otp) {
-      throw new BadRequestException('Invalid or expired OTP');
-    }
-
-    // Check OTP hasn't expired
     if (new Date() > user.otpExpiry) {
       await this.authRepository.clearOtp(user.id);
-      throw new BadRequestException('Invalid or expired OTP');
+      throw new BadRequestException('OTP session expired');
     }
 
     // Hash new password and update
-    const hashedPassword = await this.hashPassword(dto.newPassword);
+    const hashedPassword = await this.hashPassword(newPassword);
     await this.authRepository.updatePassword(user.id, hashedPassword);
 
     // Clear OTP after successful reset

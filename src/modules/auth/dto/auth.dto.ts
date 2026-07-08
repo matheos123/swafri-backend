@@ -80,27 +80,16 @@ export class RequestOtpDto {
   email!: string;
 }
 
+/** Sent to POST /auth/verify-otp — email is read from the resetToken cookie */
 export class VerifyOtpDto {
-  @ApiProperty({ example: 'player@arena.com' })
-  @IsEmail()
-  email!: string;
-
   @ApiProperty({ example: '123456', description: '6-digit OTP sent to email' })
   @IsString()
   @Length(6, 6)
   otp!: string;
 }
 
+/** Sent to POST /auth/reset-password — identity proven via resetToken cookie */
 export class ResetPasswordDto {
-  @ApiProperty({ example: 'player@arena.com' })
-  @IsEmail()
-  email!: string;
-
-  @ApiProperty({ example: '123456', description: '6-digit OTP sent to email' })
-  @IsString()
-  @Length(6, 6)
-  otp!: string;
-
   @ApiProperty({ example: 'NewP@ssw0rd!' })
   @IsString()
   @Length(8, 128)

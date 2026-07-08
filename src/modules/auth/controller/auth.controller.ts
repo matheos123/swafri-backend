@@ -1,7 +1,8 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { AuthService } from '../service/auth.service';
+import { TokenService } from '../service/token.service';
 import {
   LoginDto,
   RegisterDto,
@@ -37,7 +38,10 @@ import { JwtAuthGuard } from '../../../core/guard/jwt-auth.guard';
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly tokenService: TokenService,
+  ) {}
 
   // ─── Cookie Management ───────────────────────────────────────────────────
 
@@ -104,30 +108,6 @@ export class AuthController {
     return result;
   }
 
-  // ─── Token Refresh ───────────────────────────────────────────────────────
-
-  /**
-   * POST /auth/refresh
-   * 
-   * Exchange refresh token for new access/refresh token pair
-   * Reads refresh token from cookie first, falls back to request body
-   * Sets new tokens as cookies on success
-   */
-  @Post('refresh')
-  @ApiOperation({ summary: 'Refresh access token using refresh token' })
-  @ApiOkResponse({ type: AuthResponseDto })
-  async refresh(@Req() req: any, @Res({ passthrough: true }) res: Response) {
-    const refreshToken = req.cookies?.refreshToken;
-
-    if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token not provided');
-    }
-
-    const result = await this.authService.refresh(refreshToken);
-    this.setCookies(res, result.accessToken, result.refreshToken);
-    return result;
-  }
-
   // ─── Logout ──────────────────────────────────────────────────────────────
 
   /**
@@ -142,11 +122,14 @@ export class AuthController {
   @HttpCode(200)
   @ApiOperation({ summary: 'Logout and clear authentication cookies' })
   logout(@Req() req: any, @Res({ passthrough: true }) res: Response) {
+    const accessToken = req.cookies?.accessToken;
+    const refreshToken = req.cookies?.refreshToken;
+
     // Clear both cookies
     res.clearCookie('accessToken', { path: '/' });
     res.clearCookie('refreshToken', { path: '/' });
 
-    return this.authService.logout(req.user.userId);
+    return this.authService.logout(req.user.userId, accessToken, refreshToken);
   }
 
   // ─── Profile ─────────────────────────────────────────────────────────────
@@ -187,40 +170,95 @@ export class AuthController {
 
   /**
    * POST /auth/request-otp
-   * 
-   * Step 1 of password reset: Request OTP via email
-   * Returns generic message regardless of email existence (prevents enumeration)
+   *
+   * Step 1 of password reset:
+   * - Verifies the email exists
+   * - Generates and sends OTP via email
+   * - Returns a short-lived reset token (10 min) as an HTTP-only cookie
    */
   @Post('request-otp')
   @HttpCode(200)
   @ApiOperation({ summary: 'Request a password reset OTP sent to email' })
-  requestOtp(@Body() dto: RequestOtpDto) {
-    return this.authService.requestPasswordReset(dto);
+  async requestOtp(@Body() dto: RequestOtpDto, @Res({ passthrough: true }) res: Response) {
+    const { resetToken } = await this.authService.requestPasswordReset(dto);
+
+    // Set resetToken as an HTTP-only cookie (10 min expiry)
+    res.cookie('resetToken', resetToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 10 * 60 * 1000, // 10 minutes
+    });
+
+    return { message: 'OTP sent to your email' };
   }
 
   /**
    * POST /auth/verify-otp
-   * 
-   * Step 2 of password reset: Verify the received OTP
-   * Use this to validate OTP before showing the new password form
+   *
+   * Step 2 of password reset:
+   * - Reads userId from resetToken cookie
+   * - Verifies the OTP against the database
+   * - Returns a new resetToken with otpVerified=true
    */
   @Post('verify-otp')
   @HttpCode(200)
   @ApiOperation({ summary: 'Verify OTP for password reset' })
-  verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.authService.verifyOtp(dto);
+  async verifyOtp(@Body() dto: VerifyOtpDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const resetToken = req.cookies?.resetToken;
+    if (!resetToken) {
+      throw new UnauthorizedException('Reset session expired');
+    }
+
+    const payload = this.tokenService.verifyResetToken(resetToken);
+    if (!payload) {
+      throw new UnauthorizedException('Invalid or expired reset token');
+    }
+
+    // Verify the OTP and get a new token with otpVerified=true
+    const { resetToken: newResetToken } = await this.authService.verifyOtp(payload.sub, dto.otp);
+
+    // Update the resetToken cookie with the verified token
+    res.cookie('resetToken', newResetToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 10 * 60 * 1000, // 10 minutes
+    });
+
+    return { message: 'OTP verified successfully', verified: true };
   }
 
   /**
    * POST /auth/reset-password
-   * 
-   * Step 3 of password reset: Set new password using valid OTP
-   * OTP is cleared after successful reset
+   *
+   * Step 3 of password reset:
+   * - Reads userId from resetToken cookie
+   * - Ensures otpVerified=true
+   * - Sets the new password and clears the OTP
    */
   @Post('reset-password')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Reset password using OTP' })
-  resetPassword(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPassword(dto);
+  @ApiOperation({ summary: 'Reset password using verified OTP session' })
+  async resetPassword(@Body() dto: ResetPasswordDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const resetToken = req.cookies?.resetToken;
+    if (!resetToken) {
+      throw new UnauthorizedException('Reset session expired');
+    }
+
+    const payload = this.tokenService.verifyResetToken(resetToken);
+    if (!payload || !payload.otpVerified) {
+      throw new UnauthorizedException('OTP verification required');
+    }
+
+    // Reset the password
+    const result = await this.authService.resetPassword(payload.sub, dto.newPassword);
+
+    // Clear the resetToken cookie after successful reset
+    res.clearCookie('resetToken', { path: '/' });
+
+    return result;
   }
 }
