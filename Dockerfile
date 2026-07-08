@@ -1,7 +1,10 @@
-# Improve production Dockerfile for native npm deps + Nest build tools
-FROM node:20-alpine AS builder
+# Production Docker image for Render / container hosts
+# Use Debian (not Alpine) so Prisma engines + OpenSSL work with Neon/Postgres SSL
+FROM node:20-bookworm-slim AS builder
 
-RUN apk add --no-cache python3 make g++
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+    python3 make g++ openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -9,20 +12,23 @@ COPY package*.json ./
 COPY prisma ./prisma/
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
 
-# Install all deps (including Nest CLI) for build
 RUN npm ci && npm cache clean --force
 
 COPY . .
 
 RUN npx prisma generate
-RUN npm run build
+RUN npm run build \
+  && npm prune --omit=dev
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:20-bookworm-slim AS production
 
-RUN apk add --no-cache dumb-init
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+    openssl ca-certificates dumb-init \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
+RUN groupadd --gid 1001 nodejs \
+  && useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home nestjs
 
 WORKDIR /app
 

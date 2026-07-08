@@ -57,11 +57,21 @@ Render creates:
 | Key | Example / notes |
 |-----|-----------------|
 | `NODE_ENV` | `production` |
-| `DATABASE_URL` | From Render Postgres (use Internal URL) |
+| `DATABASE_URL` | Render Postgres Internal URL **or** Neon URL with `?sslmode=require` |
 | `JWT_SECRET` | Long random string |
 | `JWT_REFRESH_SECRET` | Different long random string |
 | `CORS_ORIGIN` | Frontend origin, e.g. `https://app.example.com` |
 | `SOCKET_CORS_ORIGIN` | Same as frontend (Socket.IO CORS) |
+
+### Neon database notes
+
+If you use Neon instead of Render Postgres:
+
+1. Copy the connection string from Neon (prefer **pooled** for the app).
+2. Ensure it ends with `?sslmode=require` (Neon usually includes this).
+3. Do **not** use a URL without SSL — migrate will fail.
+4. Example shape:
+   `postgresql://user:pass@ep-xxxxx.us-east-1.aws.neon.tech/neondb?sslmode=require`
 
 ### Recommended (blockchain)
 
@@ -112,7 +122,8 @@ Swagger should open. Blockchain health should be `healthy` if RPC + contract env
 | Problem | Fix |
 |---------|-----|
 | Build fails on `nest` | Use `npm ci --include=dev` so `@nestjs/cli` installs even when `NODE_ENV=production` |
-| Start fails on migrate | Check `DATABASE_URL` Internal URL from Render Postgres |
+| Start fails on migrate / `Could not parse schema engine response` | Usually Alpine OpenSSL + Prisma — use the Debian Dockerfile (already fixed). For Neon, ensure `DATABASE_URL` has `?sslmode=require` |
+| Start fails on migrate | Check `DATABASE_URL` Internal URL from Render Postgres or Neon SSL URL |
 | CORS / Socket blocked | Set `CORS_ORIGIN` and `SOCKET_CORS_ORIGIN` to exact frontend URL |
 | Blockchain `unavailable` | Set `BLOCKCHAIN_RPC_URL`, `GAME_REWARD_ADDRESS`, `PRIVATE_KEY` |
 | 502 on health | App failed to boot — check Render logs |
