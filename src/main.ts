@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, RequestMethod } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -30,7 +30,10 @@ async function bootstrap() {
   app.use(helmet({ contentSecurityPolicy: false }));
   app.enableCors({ origin: corsOrigin, credentials: true });
   app.use(compression());
-  app.setGlobalPrefix(prefix);
+  // Exclude health so Render (and load balancers) can use GET /health at the root
+  app.setGlobalPrefix(prefix, {
+    exclude: [{ path: 'health', method: RequestMethod.GET }],
+  });
   app.enableShutdownHooks();
 
   app.useGlobalPipes(

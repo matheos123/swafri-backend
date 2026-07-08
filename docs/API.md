@@ -325,6 +325,8 @@ Connect to: `http://localhost:3001` (Socket.IO default path `/socket.io`)
 | Friends | `POST /friends/request`, `PATCH /friends/respond`, `GET /friends`, `GET /friends/requests`, `DELETE /friends/:friendId` | JWT |
 | Health | `GET /health` | Public |
 
+Root health path (no `/api/v1` prefix) — used by Render health checks.
+
 ---
 
 ## Points: DB vs on-chain

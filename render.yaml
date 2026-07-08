@@ -13,7 +13,7 @@ services:
     branch: main
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run render:start
-    healthCheckPath: /api/v1/health
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production

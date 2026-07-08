@@ -65,7 +65,7 @@ The API will be available at:
 - WebSocket (Socket.IO): http://localhost:3001
 - Swagger UI: http://localhost:3001/api/v1/docs
 - Full written API docs: [`docs/API.md`](docs/API.md)
-- Health Check: http://localhost:3001/api/v1/health
+- Health Check: http://localhost:3001/health
 
 ## API Documentation
 
@@ -87,7 +87,7 @@ Quick settings:
 |-------|--------|
 | Build Command | `npm ci --include=dev && npm run build` |
 | Start Command | `npm run render:start` |
-| Health Check | `/api/v1/health` |
+| Health Check | `/health` |
 
 ## Docker Deployment
 

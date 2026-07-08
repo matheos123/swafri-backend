@@ -10,7 +10,7 @@ This NestJS API is ready for [Render](https://render.com).
 | Port | `process.env.PORT` (Render sets this) |
 | Build | `npm ci --include=dev && npm run build` (`prisma generate` + `nest build`) |
 | Start | `prisma migrate deploy && node dist/main.js` |
-| Health | `GET /api/v1/health` |
+| Health | `GET /health` |
 | Blueprint | [`render.yaml`](../render.yaml) |
 
 ---
@@ -42,7 +42,7 @@ Render creates:
 | Runtime | Node |
 | Build Command | `npm ci --include=dev && npm run build` |
 | Start Command | `npm run render:start` |
-| Health Check Path | `/api/v1/health` |
+| Health Check Path | `/health` |
 
 3. Add a **PostgreSQL** database and copy its **Internal Database URL** into `DATABASE_URL`.
 4. Set environment variables (see below).
@@ -99,7 +99,7 @@ If you use Neon instead of Render Postgres:
 Replace `YOUR_SERVICE` with your Render URL:
 
 ```text
-https://YOUR_SERVICE.onrender.com/api/v1/health
+https://YOUR_SERVICE.onrender.com/health
 https://YOUR_SERVICE.onrender.com/api/v1/docs
 https://YOUR_SERVICE.onrender.com/api/v1/blockchain/health
 ```
