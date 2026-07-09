@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SIWE Test</title>
+  <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
+  <style>
+    body { font-family: Arial; padding: 30px; max-width: 800px; }
+    button { padding: 10px 20px; margin: 10px 0; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+    pre { background: #f4f4f4; padding: 15px; border-radius: 4px; overflow-wrap: break-word; white-space: pre-wrap; }
+    input { width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box; }
+  </style>
+</head>
+<body>
+  <h2>🎮 Web3 Battle Arena — SIWE Test</h2>
+
+  <h3>Step 1 — Connect MetaMask</h3>
+  <button onclick="connectWallet()">Connect MetaMask</button>
+  <pre id="address">Address: not connected</pre>
+
+  <h3>Step 2 — Get Challenge</h3>
+  <button onclick="getChallenge()">Get Challenge Message</button>
+  <pre id="challenge">Challenge: not fetched</pre>
+
+  <h3>Step 3 — Sign & Verify</h3>
+  <button onclick="signAndVerify()">Sign Message & Login</button>
+  <pre id="result">Result: not signed yet</pre>
+
+  <script>
+    const API = 'http://localhost:3001/api/v1';
+    let userAddress = null;
+    let challengeMessage = null;
+
+    async function connectWallet() {
+      if (!window.ethereum) return alert('MetaMask not found! Install it first.');
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      userAddress = accounts[0];
+      document.getElementById('address').textContent = 'Address: ' + userAddress;
+    }
+
+    async function getChallenge() {
+      if (!userAddress) return alert('Connect wallet first');
+      const res = await fetch(`${API}/auth/wallet/challenge?address=${userAddress}`);
+      const data = await res.json();
+      challengeMessage = data.message;
+      document.getElementById('challenge').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function signAndVerify() {
+      if (!userAddress || !challengeMessage) return alert('Complete steps 1 and 2 first');
+
+      // Sign the message with MetaMask
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const signature = await signer.signMessage(challengeMessage);
+
+      document.getElementById('result').textContent = 'Signature: ' + signature + '\n\nSending to server...';
+
+      // Send to verify endpoint
+      const res = await fetch(`${API}/auth/wallet/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ address: userAddress, signature }),
+      });
+
+      const result = await res.json();
+      document.getElementById('result').textContent = JSON.stringify(result, null, 2);
+    }
+  </script>
+</body>
+</html>
