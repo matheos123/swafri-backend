@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import helmet from 'helmet';
@@ -12,7 +13,8 @@ import { LoggingInterceptor } from './core/interceptor/logging.interceptor';
 import { TransformInterceptor } from './core/interceptor/transform.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  // Use NestExpressApplication so app.set() is available for trust proxy
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: new AppLogger(),
     bufferLogs: true,
   });
@@ -23,8 +25,8 @@ async function bootstrap() {
   const corsOrigin = config.get<string>('app.corsOrigin') ?? 'http://localhost:3000';
 
   // Trust the reverse proxy (Render, Railway, Heroku, etc.)
-  // This ensures Express sees the correct protocol (https) so that
-  // secure cookies are set correctly behind the load balancer.
+  // Ensures Express sees correct protocol (https) so secure cookies work
+  // correctly behind the load balancer.
   app.set('trust proxy', 1);
 
   // Support multiple comma-separated allowed origins
@@ -33,7 +35,7 @@ async function bootstrap() {
 
   app.use(helmet({ contentSecurityPolicy: false }));
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       // Allow requests with no origin (Postman, mobile apps, curl)
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
