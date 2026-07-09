@@ -10,8 +10,10 @@ import { Response } from 'express';
 
 export const AUTH_COOKIE_BASE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  secure:   process.env.NODE_ENV === 'production',
+  // Cross-origin (Vercel frontend → Render backend) requires SameSite=None + Secure.
+  // In local dev (same-site) SameSite=Lax is fine and doesn't require HTTPS.
+  sameSite: (process.env.NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
   path: '/',
 };
 

@@ -18,12 +18,29 @@ async function bootstrap() {
   });
 
   const config = app.get(ConfigService);
-  const port = config.get<number>('app.port') ?? 3001;
-  const prefix = config.get<string>('app.prefix') ?? 'api/v1';
+  const port       = config.get<number>('app.port')       ?? 3001;
+  const prefix     = config.get<string>('app.prefix')     ?? 'api/v1';
   const corsOrigin = config.get<string>('app.corsOrigin') ?? 'http://localhost:3000';
 
+  // Trust the reverse proxy (Render, Railway, Heroku, etc.)
+  // This ensures Express sees the correct protocol (https) so that
+  // secure cookies are set correctly behind the load balancer.
+  app.set('trust proxy', 1);
+
+  // Support multiple comma-separated allowed origins
+  // Set CORS_ORIGIN=https://your-app.vercel.app,http://localhost:3000 in env
+  const allowedOrigins = corsOrigin.split(',').map((o) => o.trim());
+
   app.use(helmet({ contentSecurityPolicy: false }));
-  app.enableCors({ origin: corsOrigin, credentials: true });
+  app.enableCors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (Postman, mobile apps, curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
+    credentials: true,
+  });
   app.use(compression());
   app.use(cookieParser());
   app.setGlobalPrefix(prefix);
