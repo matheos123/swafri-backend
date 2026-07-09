@@ -41,8 +41,11 @@ export class GameGateway implements OnGatewayInit {
   @SubscribeMessage('game:move')
   handleMove(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomId: string; userId: string; move: Move },
+    @MessageBody() raw: any,
   ): void {
+    const data: { roomId: string; userId: string; move: Move } = 
+      typeof raw === 'string' ? JSON.parse(raw) :
+      Array.isArray(raw)      ? raw[0]          : raw;
     const { roomId, userId, move } = data;
     try {
       const room = this.gameService.submitMove(roomId, userId, move);

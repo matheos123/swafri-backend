@@ -34,8 +34,15 @@ export class MatchmakingGateway implements OnGatewayDisconnect {
   @SubscribeMessage('matchmaking:join')
   async handleJoin(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { userId: string; username: string },
+    @MessageBody() raw: any,
   ): Promise<void> {
+    // Postman sends payload as a JSON string — parse if needed
+    const data: { userId: string; username: string } = 
+      typeof raw === 'string' ? JSON.parse(raw) :
+      Array.isArray(raw)      ? raw[0]          : raw;
+
+    this.logger.debug(`matchmaking:join parsed: userId=${data?.userId} username=${data?.username}`);
+
     this.matchmakingService.joinQueue({
       userId:   data.userId,
       username: data.username,

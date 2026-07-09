@@ -42,8 +42,11 @@ export class ChatGateway implements OnGatewayConnection {
   @SubscribeMessage('chat:join')
   async handleJoin(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomId: string },
+    @MessageBody() raw: any,
   ): Promise<void> {
+    const data: { roomId: string } = 
+      typeof raw === 'string' ? JSON.parse(raw) :
+      Array.isArray(raw)      ? raw[0]          : raw;
     const { roomId } = data;
     client.join(roomId);
 
@@ -67,8 +70,11 @@ export class ChatGateway implements OnGatewayConnection {
   @SubscribeMessage('chat:message')
   async handleMessage(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomId: string; userId: string; username: string; content: string },
+    @MessageBody() raw: any,
   ): Promise<void> {
+    const data: { roomId: string; userId: string; username: string; content: string } = 
+      typeof raw === 'string' ? JSON.parse(raw) :
+      Array.isArray(raw)      ? raw[0]          : raw;
     if (!data.content?.trim()) return;
 
     const msg = await this.chatService.saveMessage(
