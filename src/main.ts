@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import helmet from 'helmet';
@@ -12,18 +13,36 @@ import { LoggingInterceptor } from './core/interceptor/logging.interceptor';
 import { TransformInterceptor } from './core/interceptor/transform.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  // Use NestExpressApplication so app.set() is available for trust proxy
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: new AppLogger(),
     bufferLogs: true,
   });
 
   const config = app.get(ConfigService);
-  const port = config.get<number>('app.port') ?? 3001;
-  const prefix = config.get<string>('app.prefix') ?? 'api/v1';
+  const port       = config.get<number>('app.port')       ?? 3001;
+  const prefix     = config.get<string>('app.prefix')     ?? 'api/v1';
   const corsOrigin = config.get<string>('app.corsOrigin') ?? 'http://localhost:3000';
 
+  // Trust the reverse proxy (Render, Railway, Heroku, etc.)
+  // Ensures Express sees correct protocol (https) so secure cookies work
+  // correctly behind the load balancer.
+  app.set('trust proxy', 1);
+
+  // Support multiple comma-separated allowed origins
+  // Set CORS_ORIGIN=https://your-app.vercel.app,http://localhost:3000 in env
+  const allowedOrigins = corsOrigin.split(',').map((o) => o.trim());
+
   app.use(helmet({ contentSecurityPolicy: false }));
-  app.enableCors({ origin: corsOrigin, credentials: true });
+  app.enableCors({
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow requests with no origin (Postman, mobile apps, curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
+    credentials: true,
+  });
   app.use(compression());
   app.use(cookieParser());
   app.setGlobalPrefix(prefix);
