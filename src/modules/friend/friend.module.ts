@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { FriendController } from './controller/friend.controller';
 import { FriendService } from './service/friend.service';
 import { AuthModule } from '../auth/auth.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, NotificationModule],
   controllers: [FriendController],
   providers: [FriendService],
   exports: [FriendService],

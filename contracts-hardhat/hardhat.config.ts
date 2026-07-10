@@ -1,17 +1,17 @@
 import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
-import { configVariable, defineConfig } from "hardhat/config";
+import { defineConfig } from "hardhat/config";
 import * as dotenv from "dotenv";
-dotenv.config({ path: "../.env" });  // reads from your root .env
+dotenv.config({ path: "../.env" });
 
 export default defineConfig({
   plugins: [hardhatToolboxMochaEthersPlugin],
   solidity: {
     profiles: {
       default: {
-        version: "0.8.20",
+        version: "0.8.28",
       },
       production: {
-        version: "0.8.20",
+        version: "0.8.28",
         settings: {
           optimizer: { enabled: true, runs: 200 },
         },
