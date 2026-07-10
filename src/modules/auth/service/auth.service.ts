@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ethers } from 'ethers';
 import { AuthRepository } from '../repository/auth.repository';
@@ -31,6 +31,8 @@ import {
  */
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly authRepository: AuthRepository,
     private readonly userService: UserService,
@@ -351,6 +353,17 @@ export class AuthService {
     const tokens = this.tokenService.generateTokenPair(user.id, user.email, user.role);
     const hashedRefreshToken = await this.passwordService.hashPassword(tokens.refreshToken);
     await this.authRepository.setRefreshTokenHash(user.id, hashedRefreshToken);
+
+    // Register player on-chain (fire-and-forget — does not block login)
+    // Only runs if the user has a blockchainProfileId and the contract is deployed
+    if (user.blockchainProfileId) {
+      this.web3
+        .registerPlayerOnChain(user.blockchainProfileId, (user as any).username)
+        .then((txHash) =>
+          this.logger.log(`SIWE: Player ${user!.id} registered on-chain. TxHash: ${txHash}`),
+        )
+        .catch((err) => this.logger.error('SIWE: registerPlayerOnChain failed', err));
+    }
 
     return {
       user: this.stripSensitiveFields(user),

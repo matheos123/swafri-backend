@@ -167,7 +167,7 @@ This is the Web3 login flow. No email or password needed. The wallet is the iden
 {
   "success": true,
   "data": {
-    "message": "Web3 Battle Arena wants you to sign in.\n\nWallet: 0xABC...\nNonce: A3F9B2C1\nIssued At: 2026-07-09T10:00:00.000Z\nChain ID: 84532 (Base Sepolia)",
+    "message": "Web3 Battle Arena wants you to sign in.\n\nWallet: 0xABC...\nNonce: A3F9B2C1\nIssued At: 2026-07-09T10:00:00.000Z\nChain ID: 11155111 (Ethereum Sepolia)",
     "nonce": "A3F9B2C1"
   }
 }
@@ -584,7 +584,7 @@ Returns match result with on-chain hash and block explorer link.
     "winner":  { "username": "Player1", "walletAddress": "0x..." },
     "result":  "decisive",
     "onChainHash": "0xabc123...",
-    "blockExplorerUrl": "https://sepolia.basescan.org/search?q=0xabc123...",
+    "blockExplorerUrl": "https://sepolia.etherscan.io/search?q=0xabc123...",
     "rounds": [...],
     "verifyInstructions": [
       "1. The onChainHash is a keccak256 hash of the match result.",
@@ -608,7 +608,7 @@ Returns player identity card by blockchain profile ID.
     "walletAddress": "0xABC...",
     "walletVerified": true,
     "walletVerifiedAt": "2026-07-09T10:00:00.000Z",
-    "blockExplorerUrl": "https://sepolia.basescan.org/address/0xABC...",
+    "blockExplorerUrl": "https://sepolia.etherscan.io/address/0xABC...",
     "stats": {
       "wins": 25, "losses": 10, "totalMatches": 35,
       "points": 250, "currentStreak": 3, "longestStreak": 8, "winRate": 71
@@ -901,6 +901,39 @@ socket.on('notification:live', (data) => {
 
 ---
 
+### Friend Game Invite Flow
+
+When a friend invites you to a game via `POST /friends/:friendId/invite`, you receive a `notification:live` event with `type: 'game_invite'`. You can accept or decline:
+
+#### Emit: `game:invite_response`
+Accept or decline a friend's game invite.
+```ts
+socket.emit('game:invite_response', {
+  fromUserId: 'inviter-uuid',     // The friend who invited you
+  toUserId: 'your-user-uuid',     // You (responder)
+  action: 'accept',               // 'accept' | 'decline'
+})
+```
+
+**On accept:**
+- Both players are automatically paired in a private game room
+- Both receive `game:matched` event with room details
+- Game starts immediately (proceed to `game:move`)
+
+**On decline:**
+- Inviter receives a `notification:live` event: `{ type: 'game_invite_declined', message: '...' }`
+- You receive `game:invite_declined` confirmation
+
+#### Listen: `game:invite_declined`
+Confirmation that you declined an invite.
+```ts
+socket.on('game:invite_declined', (data) => {
+  // { message: 'Invite declined' }
+})
+```
+
+---
+
 ### Leaderboard Real-Time
 
 #### Listen: `leaderboard:update`
@@ -1043,6 +1076,8 @@ Common status codes:
 | Listen | `game:match_result` | Match over |
 | Emit | `game:rematch` | Request rematch |
 | Listen | `game:rematch_requested` | Opponent wants rematch |
+| Emit | `game:invite_response` | Accept/decline friend invite |
+| Listen | `game:invite_declined` | Invite declined confirmation |
 | Emit | `game:list_rooms` | Get active rooms |
 | Listen | `game:rooms` | Active rooms list |
 | Emit | `spectate:join` | Join as spectator |

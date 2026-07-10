@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { Web3Provider } from '../../../core/provider/web3.provider';
 import { RedisService } from '../../../core/redis/redis.service';
@@ -19,6 +19,7 @@ import { WalletRepository } from '../repository/wallet.repository';
  */
 @Injectable()
 export class WalletService {
+  private readonly logger = new Logger(WalletService.name);
   private readonly CHALLENGE_PREFIX = 'wallet-challenge:';
   private readonly CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -113,6 +114,18 @@ export class WalletService {
 
     // Persist wallet + verification timestamp + blockchainProfileId
     await this.walletRepository.connectVerified(userId, address, blockchainProfileId);
+
+    // Fire-and-forget: register player on PlayerProfile.sol
+    // Fetch username from DB to pass to the contract
+    const userRecord = await this.walletRepository.findByUserId(userId);
+    const username = (userRecord as any)?.username ?? `Player_${address.slice(2, 8).toUpperCase()}`;
+
+    this.web3
+      .registerPlayerOnChain(blockchainProfileId, username)
+      .then((txHash) =>
+        this.logger.log(`Wallet connect: Player ${userId} registered on-chain. TxHash: ${txHash}`),
+      )
+      .catch((err) => this.logger.error('Wallet connect: registerPlayerOnChain failed', err));
 
     return {
       connected:          true,

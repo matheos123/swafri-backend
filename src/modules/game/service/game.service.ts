@@ -186,26 +186,41 @@ export class GameService {
       data:  { status: 'COMPLETED', winnerId: winnerId ?? null, endedAt: new Date() },
     });
 
-    // Generate on-chain hash (works in simulation mode too)
+    // Compute deterministic result hash for this match
     const lastRound = rounds.at(-1);
-    const onChainHash = await this.web3.recordMatchResult(
+    const winnerWallet = winnerId
+      ? (winnerId === player1.userId ? player1.walletAddress ?? null : player2.walletAddress ?? null)
+      : null;
+    const loserWallet = loserId
+      ? (loserId === player1.userId ? player1.walletAddress ?? null : player2.walletAddress ?? null)
+      : null;
+
+    const onChainHash = this.web3.computeMatchResultHash(
       matchId,
       player1.walletAddress ?? null,
       player2.walletAddress ?? null,
-      winnerId
-        ? (winnerId === player1.userId ? player1.walletAddress ?? null : player2.walletAddress ?? null)
-        : null,
+      winnerWallet,
       lastRound?.player1Move ?? 'unknown',
       lastRound?.player2Move ?? 'unknown',
     );
 
     room.onChainHash = onChainHash;
 
-    // Store hash on match record
+    // Store hash immediately in DB (deterministic — works in simulation too)
     await this.prisma.match.update({
       where: { id: matchId },
       data:  { onChainHash },
     });
+
+    // Fire-and-forget on-chain recording for ranked matches with wallets
+    if (isRanked && player1.walletAddress && player2.walletAddress) {
+      this.web3
+        .recordMatchOnChain(matchId, winnerWallet, loserWallet, onChainHash)
+        .then((txHash) =>
+          this.logger.log(`Match ${matchId} recorded on-chain. TxHash: ${txHash}`),
+        )
+        .catch((err) => this.logger.error('recordMatchOnChain error', err));
+    }
 
     if (!isRanked) {
       // ── Unranked: emit "connect wallet" prompt, nothing else saved ──

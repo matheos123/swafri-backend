@@ -8,7 +8,7 @@ Real-time multiplayer Rock Paper Scissors arena with blockchain-based identity a
 - **Database:** PostgreSQL 16 (via Prisma ORM)
 - **Cache/Queue:** Redis 7 + BullMQ
 - **Real-time:** Socket.IO 4
-- **Blockchain:** Ethers.js 6 (Base Sepolia)
+- **Blockchain:** Ethers.js 6 (Ethereum Sepolia)
 - **Auth:** JWT (access + refresh tokens)
 - **API Docs:** Swagger/OpenAPI
 
