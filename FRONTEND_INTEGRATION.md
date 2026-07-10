@@ -455,6 +455,176 @@ Remove a friend.
 
 ---
 
+#### `POST /friends/:friendId/invite`
+**Auth:** Required. Invite a friend to a game.
+
+- Friend must be online (connected to the socket server)
+- Friend receives a `notification:live` event with `type: 'game_invite'`
+- Friend can then emit `matchmaking:join` to enter the queue
+
+```json
+// Response
+{
+  "success": true,
+  "data": { "invited": true, "message": "Game invite sent to friend" }
+}
+```
+
+---
+
+### Notifications
+
+#### `GET /notifications?limit=50&offset=0`
+**Auth:** Required. Get all notifications for the current user.
+Unread notifications appear first. Supports pagination.
+
+```json
+{
+  "success": true,
+  "data": {
+    "notifications": [
+      {
+        "id": "uuid",
+        "type": "FRIEND_REQUEST",
+        "message": "Abenezer sent you a friend request",
+        "data": { "friendshipId": "uuid", "username": "Abenezer" },
+        "read": false,
+        "createdAt": "2026-07-09T10:00:00.000Z"
+      }
+    ],
+    "unreadCount": 3,
+    "limit": 50,
+    "offset": 0
+  }
+}
+```
+
+#### `PATCH /notifications/:id/read`
+**Auth:** Required. Mark a single notification as read.
+
+#### `PATCH /notifications/read-all`
+**Auth:** Required. Mark all notifications as read.
+
+---
+
+### Replay & Match History
+
+#### `GET /replay/history/me?limit=20&offset=0`
+**Auth:** Required. Your ranked match history with results.
+
+```json
+{
+  "success": true,
+  "data": {
+    "total": 15,
+    "limit": 20,
+    "offset": 0,
+    "matches": [
+      {
+        "matchId": "uuid",
+        "isRanked": true,
+        "opponent": { "id": "uuid", "username": "Player1", "walletAddress": "0x..." },
+        "result": "win",
+        "onChainHash": "0xhash...",
+        "rounds": [
+          { "roundNumber": 1, "player1Move": "rock", "player2Move": "scissors", "roundWinnerId": "uuid" }
+        ],
+        "playedAt": "2026-07-09T10:00:00.000Z",
+        "endedAt": "2026-07-09T10:05:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+#### `GET /replay/history/:userId?limit=20&offset=0`
+Public. Any player's ranked match history.
+
+#### `GET /replay/:matchId`
+Public. Full round-by-round replay of any match.
+
+```json
+{
+  "success": true,
+  "data": {
+    "matchId": "uuid",
+    "isRanked": true,
+    "status": "COMPLETED",
+    "player1": { "id": "uuid", "username": "Player1", "walletAddress": "0x...", "blockchainProfileId": "0x..." },
+    "player2": { "id": "uuid", "username": "Player2", "walletAddress": "0x...", "blockchainProfileId": "0x..." },
+    "winner":  { "id": "uuid", "username": "Player1" },
+    "onChainHash": "0xhash...",
+    "rounds": [
+      { "roundNumber": 1, "player1Move": "rock", "player2Move": "scissors", "roundWinnerId": "uuid" },
+      { "roundNumber": 2, "player1Move": "paper", "player2Move": "rock", "roundWinnerId": "uuid" }
+    ],
+    "createdAt": "2026-07-09T10:00:00.000Z",
+    "endedAt":   "2026-07-09T10:05:00.000Z"
+  }
+}
+```
+
+---
+
+### Verify (Public — no auth needed)
+
+These are the Web3 proof endpoints. Judges and auditors use these to independently verify any match or player identity.
+
+#### `GET /verify/match/:matchId`
+Returns match result with on-chain hash and block explorer link.
+
+```json
+{
+  "success": true,
+  "data": {
+    "matchId": "uuid",
+    "isRanked": true,
+    "player1": { "username": "Player1", "walletAddress": "0x...", "blockchainProfileId": "0x..." },
+    "player2": { "username": "Player2", "walletAddress": "0x...", "blockchainProfileId": "0x..." },
+    "winner":  { "username": "Player1", "walletAddress": "0x..." },
+    "result":  "decisive",
+    "onChainHash": "0xabc123...",
+    "blockExplorerUrl": "https://sepolia.basescan.org/search?q=0xabc123...",
+    "rounds": [...],
+    "verifyInstructions": [
+      "1. The onChainHash is a keccak256 hash of the match result.",
+      "2. You can search the hash on the block explorer link above.",
+      "3. To independently verify: compute keccak256(matchId + player addresses + winner + moves + timestamp).",
+      "4. If the hash matches, the result is cryptographically proven and tamper-proof."
+    ]
+  }
+}
+```
+
+#### `GET /verify/player/:profileId`
+Returns player identity card by blockchain profile ID.
+
+```json
+{
+  "success": true,
+  "data": {
+    "profileId": "0xhash...",
+    "username": "Player1",
+    "walletAddress": "0xABC...",
+    "walletVerified": true,
+    "walletVerifiedAt": "2026-07-09T10:00:00.000Z",
+    "blockExplorerUrl": "https://sepolia.basescan.org/address/0xABC...",
+    "stats": {
+      "wins": 25, "losses": 10, "totalMatches": 35,
+      "points": 250, "currentStreak": 3, "longestStreak": 8, "winRate": 71
+    },
+    "achievements": [...],
+    "achievementCount": 4,
+    "memberSince": "2026-07-09T08:00:00.000Z"
+  }
+}
+```
+
+#### `GET /verify/wallet/:walletAddress`
+Same as above but looked up by wallet address instead of profile ID.
+
+---
+
 ## WebSocket (Socket.IO)
 
 ### Setup
@@ -846,6 +1016,16 @@ Common status codes:
 | GET | `/friends` | Yes | Friend list |
 | GET | `/friends/requests` | Yes | Pending requests |
 | DELETE | `/friends/:friendId` | Yes | Remove friend |
+| POST | `/friends/:friendId/invite` | Yes | Invite friend to game |
+| GET | `/notifications` | Yes | Get all notifications |
+| PATCH | `/notifications/:id/read` | Yes | Mark one as read |
+| PATCH | `/notifications/read-all` | Yes | Mark all as read |
+| GET | `/replay/history/me` | Yes | Your match history |
+| GET | `/replay/history/:userId` | No | Player match history |
+| GET | `/replay/:matchId` | No | Match replay |
+| GET | `/verify/match/:matchId` | No | Verify match on-chain |
+| GET | `/verify/player/:profileId` | No | Verify player identity |
+| GET | `/verify/wallet/:walletAddress` | No | Verify by wallet |
 
 ### Socket Events
 

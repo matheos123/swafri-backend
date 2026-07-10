@@ -17,6 +17,7 @@ import { ReplayModule } from './modules/replay/replay.module';
 import { FriendModule } from './modules/friend/friend.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { HealthModule } from './modules/health/health.module';
+import { VerifyModule } from './modules/verify/verify.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { HealthModule } from './modules/health/health.module';
     FriendModule,
     NotificationModule,
     HealthModule,
+    VerifyModule,
   ],
 })
 export class AppModule {}

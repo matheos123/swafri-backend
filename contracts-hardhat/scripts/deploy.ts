@@ -1,43 +1,67 @@
-import "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 import hre from "hardhat";
+import { ethers } from "ethers";
+import * as dotenv from "dotenv";
+import { readFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+dotenv.config({ path: "../.env" });
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+async function deploy(
+  provider: ethers.JsonRpcProvider,
+  wallet: ethers.Wallet,
+  artifactName: string,
+  constructorArgs: unknown[] = [],
+): Promise<string> {
+  // Read artifact from Hardhat's compiled output
+  const artifactPath = join(
+    __dirname,
+    `../artifacts/contracts/${artifactName}.sol/${artifactName}.json`,
+  );
+  const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+
+  const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, wallet);
+  const contract = await factory.deploy(...constructorArgs);
+  await contract.waitForDeployment();
+  const address = await contract.getAddress();
+  console.log(`✅ ${artifactName} deployed to: ${address}`);
+  return address;
+}
 
 async function main() {
-  // @ts-ignore — Hardhat 3 injects ethers via plugin at runtime
-  const ethers = (hre as any).ethers;
+  const rpcUrl     = process.env.BLOCKCHAIN_RPC_URL ?? "https://sepolia.base.org";
+  const privateKey = process.env.PRIVATE_KEY;
 
-  const [deployer] = await ethers.getSigners();
-  const balance = await ethers.provider.getBalance(deployer.address);
-  console.log("Deploying with:", deployer.address);
-  console.log("Balance:", ethers.formatEther(balance), "ETH");
+  if (!privateKey) {
+    throw new Error("PRIVATE_KEY not set in .env");
+  }
 
-  // Deploy PlayerProfile
-  const PlayerProfile = await ethers.getContractFactory("PlayerProfile");
-  const playerProfile = await PlayerProfile.deploy();
-  await playerProfile.waitForDeployment();
-  const ppAddress = await playerProfile.getAddress();
-  console.log("PlayerProfile deployed to:", ppAddress);
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const wallet   = new ethers.Wallet(privateKey, provider);
 
-  // Deploy MatchRegistry
-  const MatchRegistry = await ethers.getContractFactory("MatchRegistry");
-  const matchRegistry = await MatchRegistry.deploy();
-  await matchRegistry.waitForDeployment();
-  const mrAddress = await matchRegistry.getAddress();
-  console.log("MatchRegistry deployed to:", mrAddress);
+  const balance = await provider.getBalance(wallet.address);
+  console.log(`\nDeployer: ${wallet.address}`);
+  console.log(`Balance:  ${ethers.formatEther(balance)} ETH`);
+  console.log(`Network:  Base Sepolia (${rpcUrl})\n`);
 
-  // Deploy AchievementBadge
-  const AchievementBadge = await ethers.getContractFactory("AchievementBadge");
-  const achievementBadge = await AchievementBadge.deploy();
-  await achievementBadge.waitForDeployment();
-  const abAddress = await achievementBadge.getAddress();
-  console.log("AchievementBadge deployed to:", abAddress);
+  if (balance === 0n) {
+    throw new Error("Deployer wallet has no ETH. Get test ETH from a faucet first.");
+  }
 
-  console.log("\n--- Copy these into your .env ---");
-  console.log(`PLAYER_PROFILE_ADDRESS=${ppAddress}`);
-  console.log(`BATTLE_ARENA_ADDRESS=${mrAddress}`);
-  console.log(`ACHIEVEMENT_NFT_ADDRESS=${abAddress}`);
+  const playerProfileAddress   = await deploy(provider, wallet, "PlayerProfile");
+  const matchRegistryAddress   = await deploy(provider, wallet, "MatchRegistry");
+  const achievementBadgeAddress = await deploy(provider, wallet, "AchievementBadge");
+
+  console.log("\n--- Copy these into your .env and Render env vars ---");
+  console.log(`PLAYER_PROFILE_ADDRESS=${playerProfileAddress}`);
+  console.log(`BATTLE_ARENA_ADDRESS=${matchRegistryAddress}`);
+  console.log(`ACHIEVEMENT_NFT_ADDRESS=${achievementBadgeAddress}`);
+  console.log("-----------------------------------------------------\n");
 }
 
 main().catch((e) => {
-  console.error(e);
+  console.error("Deployment failed:", e);
   process.exit(1);
 });
