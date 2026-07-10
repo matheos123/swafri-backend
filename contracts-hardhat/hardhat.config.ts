@@ -25,5 +25,11 @@ export default defineConfig({
       url: process.env.BLOCKCHAIN_RPC_URL ?? "https://sepolia.base.org",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
+    sepolia: {
+      type: "http",
+      chainType: "l1",
+      url: process.env.BLOCKCHAIN_RPC_URL ?? "https://rpc.sepolia.org",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+    },
   },
 });

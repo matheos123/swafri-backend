@@ -6,16 +6,18 @@ export type NotificationType =
   | 'friend_request'
   | 'friend_accepted'
   | 'game_invite'
+  | 'game_invite_declined'
   | 'achievement_earned'
   | 'match_found';
 
 // Maps our string type to the Prisma enum
 const TYPE_MAP: Record<NotificationType, string> = {
-  friend_request:    'FRIEND_REQUEST',
-  friend_accepted:   'FRIEND_ACCEPTED',
-  game_invite:       'GAME_INVITE',
-  achievement_earned:'ACHIEVEMENT_EARNED',
-  match_found:       'MATCH_FOUND',
+  friend_request:       'FRIEND_REQUEST',
+  friend_accepted:      'FRIEND_ACCEPTED',
+  game_invite:          'GAME_INVITE',
+  game_invite_declined: 'GAME_INVITE_DECLINED',
+  achievement_earned:   'ACHIEVEMENT_EARNED',
+  match_found:          'MATCH_FOUND',
 };
 
 @Injectable()
