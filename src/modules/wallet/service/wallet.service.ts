@@ -113,7 +113,7 @@ export class WalletService {
     );
 
     // Persist wallet + verification timestamp + blockchainProfileId
-    await this.walletRepository.connectVerified(userId, address, blockchainProfileId);
+    await this.walletRepository.connectVerified(userId, address.toLowerCase(), blockchainProfileId);
 
     // Fire-and-forget: register player on PlayerProfile.sol
     // Fetch username from DB to pass to the contract

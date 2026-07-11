@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { WalletService } from '../service/wallet.service';
 import { WalletConnectDto } from '../dto/wallet-connect.dto';
@@ -34,7 +34,7 @@ export class WalletController {
    */
   @Get('challenge')
   @ApiOperation({ summary: 'Get a wallet connection challenge message to sign' })
-  challenge(@CurrentUser('userId') userId: string, @Body() dto: WalletChallengeDto) {
+  challenge(@CurrentUser('userId') userId: string, @Query() dto: WalletChallengeDto) {
     return this.walletService.generateChallenge(userId, dto.address);
   }
 
