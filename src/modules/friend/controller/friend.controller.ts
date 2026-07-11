@@ -44,6 +44,12 @@ export class FriendController {
     return this.friendService.getPendingRequests(userId);
   }
 
+  @Get('requests/outgoing')
+  @ApiOperation({ summary: 'List pending outgoing friend requests' })
+  getOutgoingRequests(@CurrentUser('userId') userId: string) {
+    return this.friendService.getOutgoingRequests(userId);
+  }
+
   @Delete(':friendId')
   @ApiOperation({ summary: 'Remove a friend' })
   remove(

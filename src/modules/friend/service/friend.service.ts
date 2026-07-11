@@ -156,6 +156,13 @@ export class FriendService {
     });
   }
 
+  getOutgoingRequests(userId: string) {
+    return this.prisma.friendship.findMany({
+      where:   { requesterId: userId, status: 'PENDING' },
+      include: { addressee: { select: { id: true, username: true, avatar: true } } },
+    });
+  }
+
   // ─── Remove Friend ────────────────────────────────────────────────────────
 
   async removeFriend(userId: string, friendId: string) {
