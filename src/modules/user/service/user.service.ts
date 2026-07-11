@@ -102,6 +102,34 @@ export class UserService {
     });
   }
 
+  // ─── Public Reads ─────────────────────────────────────────────────────────
+
+  /**
+   * Paginated list of active users — public.
+   */
+  async findAllPublic(
+    pagination: PaginationDto,
+    search?: string,
+  ): Promise<PaginatedResponseDto<PublicUserDto>> {
+    // Only return active, non-deleted users
+    const filters: UserFilters = { 
+      isActive: true, 
+      includeDeleted: false,
+      search: search?.trim() || undefined,
+    };
+    const { data, total } = await this.userRepository.findAll(filters, {
+      limit:  pagination.limit,
+      offset: pagination.offset,
+    });
+
+    return PaginatedResponseDto.of(
+      data.map((u) => this.stripPublic(u)),
+      total,
+      pagination.page,
+      pagination.limit,
+    );
+  }
+
   // ─── Paginated List (admin) ───────────────────────────────────────────────
 
   /**

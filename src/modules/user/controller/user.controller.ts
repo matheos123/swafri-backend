@@ -56,6 +56,23 @@ export class UserController {
   // ─── Public ───────────────────────────────────────────────────────────────
 
   /**
+   * GET /users/public
+   * Paginated list of all active users (public profiles).
+   */
+  @Get('public')
+  @ApiOperation({ summary: 'Get a paginated list of public user profiles' })
+  @ApiOkResponse({ type: PublicUserDto, isArray: true })
+  @ApiQuery({ name: 'page',  type: Number, required: false })
+  @ApiQuery({ name: 'limit', type: Number, required: false })
+  @ApiQuery({ name: 'search', type: String, required: false })
+  findAllPublic(
+    @Query() pagination: PaginationDto,
+    @Query('search') search?: string,
+  ) {
+    return this.userService.findAllPublic(pagination, search);
+  }
+
+  /**
    * GET /users/:id
    * Public profile — no auth required.
    * Soft-deleted users return 404.
