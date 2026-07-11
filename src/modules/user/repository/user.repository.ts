@@ -93,7 +93,10 @@ export class UserRepository {
    */
   findByWalletAddress(walletAddress: string): Promise<User | null> {
     return this.prisma.user.findFirst({
-      where: { walletAddress, deletedAt: null },
+      where: { 
+        walletAddress: { equals: walletAddress, mode: 'insensitive' }, 
+        deletedAt: null 
+      },
     });
   }
 

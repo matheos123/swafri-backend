@@ -339,15 +339,15 @@ export class AuthService {
         email:               `${normalizedAddress}@wallet.local`,
         username:            autoUsername,
         password:            hashedPassword,
-        walletAddress:       address,
+        walletAddress:       normalizedAddress,
         walletVerifiedAt:    new Date(),
         blockchainProfileId,
       });
     } else {
       // Existing user — refresh wallet verification timestamp
-      await this.userService.updateWalletVerified(user.id, address);
+      await this.userService.updateWalletVerified(user.id, normalizedAddress);
       // Re-fetch to get updated fields
-      user = (await this.userService.findByWalletAddress(address))!;
+      user = (await this.userService.findByWalletAddress(normalizedAddress))!;
     }
 
     const tokens = this.tokenService.generateTokenPair(user.id, user.email, user.role);

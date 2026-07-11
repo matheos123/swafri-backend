@@ -27,7 +27,9 @@ export class WalletRepository {
   }
 
   findByWallet(walletAddress: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { walletAddress } });
+    return this.prisma.user.findFirst({ 
+      where: { walletAddress: { equals: walletAddress, mode: 'insensitive' } } 
+    });
   }
 
   findByUserId(userId: string): Promise<User | null> {
