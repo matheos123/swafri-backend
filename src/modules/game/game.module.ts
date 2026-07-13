@@ -7,6 +7,7 @@ import { LeaderboardModule } from '../leaderboard/leaderboard.module';
 import { NotificationModule } from '../notification/notification.module';
 import { Web3Module } from '../../core/provider/web3.module';
 import { FriendModule } from '../friend/friend.module';
+import { SquadModule } from '../squad/squad.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { FriendModule } from '../friend/friend.module';
     NotificationModule,         // NotificationService
     Web3Module,                 // Web3Provider
     forwardRef(() => FriendModule), // FriendService (circular dependency)
+    forwardRef(() => SquadModule),  // SquadGateway (circular dependency)
   ],
   controllers: [GameController],
   providers:   [GameService, GameGateway],

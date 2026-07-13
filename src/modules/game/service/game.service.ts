@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { Server } from 'socket.io';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -8,6 +8,7 @@ import { NotificationService } from '../../notification/service/notification.ser
 import { LeaderboardService } from '../../leaderboard/service/leaderboard.service';
 import { Web3Provider } from '../../../core/provider/web3.provider';
 import { QueueService } from '../../../core/queue/queue.service';
+import { SquadGateway } from '../../squad/gateway/squad.gateway';
 
 export type GameStatus = 'waiting' | 'in_progress' | 'completed' | 'abandoned';
 
@@ -59,6 +60,8 @@ export class GameService {
     private readonly leaderboardSvc:  LeaderboardService,
     private readonly web3:            Web3Provider,
     private readonly queueService:    QueueService,
+    @Inject(forwardRef(() => SquadGateway))
+    private readonly squadGateway:    SquadGateway,
   ) {}
 
   // Called by GameGateway.afterInit so we have the socket server reference
@@ -73,7 +76,8 @@ export class GameService {
     const roomId  = `room-${uuidv4()}`;
     const matchId = uuidv4();
 
-    // A match is ranked only when BOTH players have a verified wallet
+    // A match is fully ranked only when BOTH players have a verified wallet
+    // But we still save stats for individual verified players (hybrid mode)
     const isRanked = Boolean(player1.walletVerifiedAt && player2.walletVerifiedAt);
 
     await this.prisma.match.create({
@@ -214,23 +218,29 @@ export class GameService {
       data:  { onChainHash },
     });
 
-    // Queue on-chain recording for ranked matches with wallets (persistent with retries)
-    if (isRanked && player1.walletAddress && player2.walletAddress) {
+    // Check which players have verified wallets
+    const player1HasWallet = Boolean(player1.walletVerifiedAt);
+    const player2HasWallet = Boolean(player2.walletVerifiedAt);
+    const anyWalletConnected = player1HasWallet || player2HasWallet;
+
+    // Queue on-chain recording if AT LEAST ONE player has wallet
+    // This allows verified players to have their achievements on blockchain
+    // even when playing against unverified opponents
+    if (anyWalletConnected) {
       this.queueService
         .recordMatchOnChain(matchId, winnerWallet, loserWallet, onChainHash)
         .then((jobId) =>
-          this.logger.log(`Match ${matchId} blockchain job queued: ${jobId}`),
+          this.logger.log(`[BLOCKCHAIN] Match ${matchId} queued for on-chain recording: ${jobId}`),
         )
-        .catch((err) => this.logger.error('Failed to queue blockchain job', err));
+        .catch((err) => this.logger.error('[BLOCKCHAIN] Failed to queue job', err));
     }
 
-    if (!isRanked) {
-      // ── Unranked: emit "connect wallet" prompt, nothing else saved ──
-      this.logger.log(`Unranked match ${matchId} complete — result not persisted`);
+    if (!anyWalletConnected) {
+      // ── Practice mode: No wallets connected, nothing saved ──
+      this.logger.log(`Practice match ${matchId} complete — no stats saved`);
 
-      // Prompt unverified players to connect their wallet
-      const unverifiedPlayers = [player1, player2].filter((p) => !p.walletVerifiedAt);
-      for (const p of unverifiedPlayers) {
+      // Prompt both players to connect their wallet
+      for (const p of [player1, player2]) {
         if (this.server) {
           const socket = this.server.sockets.sockets.get(p.socketId);
           socket?.emit('notification:live', {
@@ -242,74 +252,134 @@ export class GameService {
       return;
     }
 
-    // ── Ranked: persist stats, achievements, leaderboard push ──
+    // ── Hybrid/Ranked mode: Save stats for players with wallets ──
+    this.logger.log(`Match ${matchId} complete — saving stats for verified players`);
 
     if (winnerId && loserId) {
-      // Winner stats
-      const winner = await this.prisma.user.update({
-        where: { id: winnerId },
-        data: {
-          wins:          { increment: 1 },
-          totalMatches:  { increment: 1 },
-          points:        { increment: 10 },
-          currentStreak: { increment: 1 },
-        },
-      });
-
-      // Update longestStreak if beaten
-      if (winner.currentStreak > winner.longestStreak) {
-        await this.prisma.user.update({
+      // Update winner stats (if wallet connected)
+      const isWinnerVerified = 
+        (winnerId === player1.userId && player1HasWallet) ||
+        (winnerId === player2.userId && player2HasWallet);
+      
+      if (isWinnerVerified) {
+        const winner = await this.prisma.user.update({
           where: { id: winnerId },
-          data:  { longestStreak: winner.currentStreak },
+          data: {
+            wins:          { increment: 1 },
+            totalMatches:  { increment: 1 },
+            points:        { increment: 10 },
+            currentStreak: { increment: 1 },
+          },
         });
+
+        // Update longestStreak if beaten
+        if (winner.currentStreak > winner.longestStreak) {
+          await this.prisma.user.update({
+            where: { id: winnerId },
+            data:  { longestStreak: winner.currentStreak },
+          });
+        }
+        
+        this.logger.log(`[STATS] Winner ${winnerId} awarded +10 points (streak: ${winner.currentStreak})`);
       }
 
-      // Loser stats — streak resets
-      await this.prisma.user.update({
-        where: { id: loserId },
-        data: {
-          losses:        { increment: 1 },
-          totalMatches:  { increment: 1 },
-          currentStreak: 0,
-        },
-      });
+      // Update loser stats (if wallet connected) — streak resets
+      const isLoserVerified = 
+        (loserId === player1.userId && player1HasWallet) ||
+        (loserId === player2.userId && player2HasWallet);
+      
+      if (isLoserVerified) {
+        await this.prisma.user.update({
+          where: { id: loserId },
+          data: {
+            losses:        { increment: 1 },
+            totalMatches:  { increment: 1 },
+            currentStreak: 0,
+          },
+        });
+        
+        this.logger.log(`[STATS] Loser ${loserId} streak reset to 0`);
+      }
+      
+      // Prompt unverified player to connect wallet
+      if (!isWinnerVerified && this.server) {
+        const winnerPlayer = winnerId === player1.userId ? player1 : player2;
+        const socket = this.server.sockets.sockets.get(winnerPlayer.socketId);
+        socket?.emit('notification:live', {
+          type:    'success',
+          message: 'You won! Connect your wallet to save your progress and earn rewards!',
+        });
+      }
+      
+      if (!isLoserVerified && this.server) {
+        const loserPlayer = loserId === player1.userId ? player1 : player2;
+        const socket = this.server.sockets.sockets.get(loserPlayer.socketId);
+        socket?.emit('notification:live', {
+          type:    'info',
+          message: 'Connect your wallet to save your match history and compete on the leaderboard!',
+        });
+      }
     } else {
-      // Draw — both get totalMatches++
-      await Promise.all([
-        this.prisma.user.update({ where: { id: player1.userId }, data: { totalMatches: { increment: 1 } } }),
-        this.prisma.user.update({ where: { id: player2.userId }, data: { totalMatches: { increment: 1 } } }),
-      ]);
+      // Draw — increment totalMatches for verified players only
+      const updates: Promise<any>[] = [];
+      
+      if (player1HasWallet) {
+        updates.push(
+          this.prisma.user.update({ 
+            where: { id: player1.userId }, 
+            data: { totalMatches: { increment: 1 } } 
+          })
+        );
+      }
+      
+      if (player2HasWallet) {
+        updates.push(
+          this.prisma.user.update({ 
+            where: { id: player2.userId }, 
+            data: { totalMatches: { increment: 1 } } 
+          })
+        );
+      }
+      
+      await Promise.all(updates);
+      this.logger.log(`[STATS] Draw — totalMatches updated for verified players`);
     }
 
-    // Check and award achievements for both players
-    const [p1Result, p2Result] = await Promise.all([
-      this.achievementSvc.checkAndAward(player1.userId),
-      this.achievementSvc.checkAndAward(player2.userId),
-    ]);
+    // Check and award achievements ONLY for verified players
+    const achievementPromises: Promise<any>[] = [];
+    
+    if (player1HasWallet) {
+      achievementPromises.push(
+        this.achievementSvc.checkAndAward(player1.userId).then((result) => {
+          return { player: player1, result };
+        })
+      );
+    }
+    
+    if (player2HasWallet) {
+      achievementPromises.push(
+        this.achievementSvc.checkAndAward(player2.userId).then((result) => {
+          return { player: player2, result };
+        })
+      );
+    }
+
+    const achievementResults = await Promise.all(achievementPromises);
 
     // Award bonus points for newly unlocked achievements (SRS: +20 per badge)
-    if (p1Result.bonusPoints > 0) {
-      await this.prisma.user.update({
-        where: { id: player1.userId },
-        data:  { points: { increment: p1Result.bonusPoints } },
-      });
-      this.logger.log(`Player ${player1.username} earned ${p1Result.bonusPoints} bonus points from ${p1Result.badges.length} badge(s)`);
-    }
+    for (const { player, result } of achievementResults) {
+      if (result.bonusPoints > 0) {
+        await this.prisma.user.update({
+          where: { id: player.userId },
+          data:  { points: { increment: result.bonusPoints } },
+        });
+        this.logger.log(`[ACHIEVEMENT] Player ${player.username} earned ${result.bonusPoints} bonus points from ${result.badges.length} badge(s)`);
+      }
 
-    if (p2Result.bonusPoints > 0) {
-      await this.prisma.user.update({
-        where: { id: player2.userId },
-        data:  { points: { increment: p2Result.bonusPoints } },
-      });
-      this.logger.log(`Player ${player2.username} earned ${p2Result.bonusPoints} bonus points from ${p2Result.badges.length} badge(s)`);
-    }
-
-    // Notify players of new badges
-    for (const badge of p1Result.badges) {
-      this.notificationSvc.broadcastAchievement(player1.socketId, badge);
-    }
-    for (const badge of p2Result.badges) {
-      this.notificationSvc.broadcastAchievement(player2.socketId, badge);
+      // Notify player of new badges
+      for (const badge of result.badges) {
+        this.notificationSvc.broadcastAchievement(player.socketId, badge);
+      }
     }
 
     // Push updated leaderboard to all connected clients
@@ -319,6 +389,14 @@ export class GameService {
     }
 
     this.logger.log(`Ranked match ${matchId} complete — winner: ${winnerId ?? 'draw'} | hash: ${onChainHash}`);
+    
+    // Notify squad gateway if this match was part of a squad queue
+    try {
+      await this.squadGateway.notifyMatchEnd(room.roomId, winnerId ?? null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Failed to notify squad gateway: ${message}`);
+    }
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────

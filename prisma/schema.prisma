@@ -32,6 +32,10 @@ model User {
   achievements     UserAchievement[]
   sentFriendships  Friendship[]      @relation("SentFriendships")
   receivedFriendships Friendship[]   @relation("ReceivedFriendships")
+  ownedSquads      Squad[]           @relation("SquadOwner")
+  squadMemberships SquadMember[]
+  sentSquadInvites SquadInvite[]     @relation("SquadInviter")
+  receivedSquadInvites SquadInvite[] @relation("SquadInvitee")
 
   @@index([walletAddress])
   @@index([points])
@@ -112,13 +116,63 @@ model Friendship {
 model ChatMessage {
   id        String   @id @default(uuid())
   roomId    String
+  squadId   String?
+  squad     Squad?   @relation(fields: [squadId], references: [id], onDelete: Cascade)
   userId    String
   username  String
   content   String
   createdAt DateTime @default(now())
 
   @@index([roomId])
+  @@index([squadId])
   @@index([createdAt])
+}
+
+model Squad {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String
+  owner       User          @relation("SquadOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     SquadMember[]
+  invites     SquadInvite[]
+  messages    ChatMessage[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([ownerId])
+}
+
+model SquadMember {
+  id       String    @id @default(uuid())
+  squadId  String
+  squad    Squad     @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     SquadRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+
+  @@unique([squadId, userId])
+  @@index([squadId])
+  @@index([userId])
+}
+
+model SquadInvite {
+  id        String       @id @default(uuid())
+  squadId   String
+  squad     Squad        @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  inviterId String
+  inviter   User         @relation("SquadInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  inviteeId String
+  invitee   User         @relation("SquadInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+  status    InviteStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([squadId, inviteeId])
+  @@index([squadId])
+  @@index([inviteeId])
+  @@index([status])
 }
 
 model Notification {
@@ -160,4 +214,20 @@ enum NotificationType {
   GAME_INVITE_DECLINED
   ACHIEVEMENT_EARNED
   MATCH_FOUND
+  SQUAD_INVITE
+  SQUAD_INVITE_ACCEPTED
+  SQUAD_MEMBER_JOINED
+  SQUAD_MEMBER_LEFT
+}
+
+enum SquadRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
