@@ -19,6 +19,7 @@ import { FriendModule } from './modules/friend/friend.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { HealthModule } from './modules/health/health.module';
 import { VerifyModule } from './modules/verify/verify.module';
+import { SquadModule } from './modules/squad/squad.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { VerifyModule } from './modules/verify/verify.module';
     NotificationModule,
     HealthModule,
     VerifyModule,
+    SquadModule,
   ],
 })
 export class AppModule {}
