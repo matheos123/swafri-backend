@@ -5,6 +5,7 @@ import appConfig from './core/config/index';
 import { PrismaModule } from './prisma/prisma.module';
 import { Web3Module } from './core/provider/web3.module';
 import { RedisModule } from './core/redis/redis.module';
+import { QueueModule } from './core/queue/queue.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { WalletModule } from './modules/wallet/wallet.module';
@@ -47,6 +48,7 @@ import { VerifyModule } from './modules/verify/verify.module';
     PrismaModule,
     Web3Module,
     RedisModule,
+    QueueModule,
     AuthModule,
     UserModule,
     WalletModule,

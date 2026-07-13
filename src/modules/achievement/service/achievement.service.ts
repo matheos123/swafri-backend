@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { Web3Provider } from '../../../core/provider/web3.provider';
+import { QueueService } from '../../../core/queue/queue.service';
 
 @Injectable()
 export class AchievementService {
@@ -9,6 +10,7 @@ export class AchievementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly web3:   Web3Provider,
+    private readonly queueService: QueueService,
   ) {}
 
   getAllAchievements() {
@@ -27,7 +29,7 @@ export class AchievementService {
    * Evaluate which new achievements the user has earned and award them.
    * For each newly earned badge:
    *   1. Persist to DB (UserAchievement row)
-   *   2. Fire-and-forget: mint ERC-1155 NFT on AchievementBadge.sol (only if user has a wallet)
+   *   2. Queue NFT minting job (persistent with retries) for wallet-verified users
    *
    * @returns object with badge names and total bonus points earned (20 points per badge per SRS)
    */
@@ -50,17 +52,17 @@ export class AchievementService {
         newlyEarned.push(a.name);
         this.logger.log(`Achievement "${a.name}" unlocked for ${userId} — bonus: +20 points`);
 
-        // Fire-and-forget: mint NFT on-chain (only for wallet-verified users)
+        // Queue NFT minting job (persistent with retries) for wallet-verified users
         if (user.walletAddress && user.walletVerifiedAt) {
-          this.web3
+          this.queueService
             .mintBadgeOnChain(user.walletAddress, a.name)
-            .then((txHash) =>
+            .then((jobId) =>
               this.logger.log(
-                `Badge NFT minted on-chain: "${a.name}" for ${user.walletAddress}. TxHash: ${txHash}`,
+                `Badge minting job queued: "${a.name}" for ${user.walletAddress} | Job ID: ${jobId}`,
               ),
             )
             .catch((err) =>
-              this.logger.error(`mintBadgeOnChain failed for badge "${a.name}"`, err),
+              this.logger.error(`Failed to queue badge minting job for "${a.name}"`, err),
             );
         }
       }

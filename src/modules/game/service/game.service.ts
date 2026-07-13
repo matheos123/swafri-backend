@@ -7,6 +7,7 @@ import { AchievementService } from '../../achievement/service/achievement.servic
 import { NotificationService } from '../../notification/service/notification.service';
 import { LeaderboardService } from '../../leaderboard/service/leaderboard.service';
 import { Web3Provider } from '../../../core/provider/web3.provider';
+import { QueueService } from '../../../core/queue/queue.service';
 
 export type GameStatus = 'waiting' | 'in_progress' | 'completed' | 'abandoned';
 
@@ -57,6 +58,7 @@ export class GameService {
     private readonly notificationSvc: NotificationService,
     private readonly leaderboardSvc:  LeaderboardService,
     private readonly web3:            Web3Provider,
+    private readonly queueService:    QueueService,
   ) {}
 
   // Called by GameGateway.afterInit so we have the socket server reference
@@ -212,14 +214,14 @@ export class GameService {
       data:  { onChainHash },
     });
 
-    // Fire-and-forget on-chain recording for ranked matches with wallets
+    // Queue on-chain recording for ranked matches with wallets (persistent with retries)
     if (isRanked && player1.walletAddress && player2.walletAddress) {
-      this.web3
+      this.queueService
         .recordMatchOnChain(matchId, winnerWallet, loserWallet, onChainHash)
-        .then((txHash) =>
-          this.logger.log(`Match ${matchId} recorded on-chain. TxHash: ${txHash}`),
+        .then((jobId) =>
+          this.logger.log(`Match ${matchId} blockchain job queued: ${jobId}`),
         )
-        .catch((err) => this.logger.error('recordMatchOnChain error', err));
+        .catch((err) => this.logger.error('Failed to queue blockchain job', err));
     }
 
     if (!isRanked) {
