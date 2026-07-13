@@ -1,7 +1,7 @@
 # Web3 Battle Arena — Project Status Report
 
-**Last Updated:** July 10, 2026  
-**Status:** ✅ Production Ready — Deployed on Render  
+**Last Updated:** July 13, 2026  
+**Status:** ✅ Production Ready — Deployed on Render (Point System & Achievements Fixed)  
 **API URL:** https://rps-arena-2q2f.onrender.com/api/v1  
 **Docs:** https://rps-arena-2q2f.onrender.com/api/v1/docs
 
@@ -173,19 +173,27 @@ A real-time multiplayer Web3 gaming platform where players compete in Rock-Paper
 ---
 
 ### Phase 7: Achievement Badge System ✅
-**Status:** Complete  
+**Status:** Complete (Fixed July 13, 2026)  
 **Features:**
-- Pre-seeded achievement badges in DB (`prisma/seed.ts`)
+- SRS-compliant streak-based achievement badges
+- 5 badges: Water (3-win), Fire (5-win), Gold (7-win), Diamond (10-win), Platinum (15-win)
+- +20 bonus points per badge unlock (per SRS specification)
 - Automatic badge unlock after ranked matches
 - Real-time notification on unlock
 - Public & user-specific badge endpoints
 - Achievement criteria evaluation system
 
+**Point System (SRS-Compliant):**
+- Match Win: +10 points
+- Badge Unlock: +20 bonus points per badge
+- Example: Win 3 in a row = +10 (match) + +20 (Water Badge) = +30 total points on 3rd win
+
 **Achievements:**
-1. First Victory — win 1 match
-2. Winning Streak — 3 wins in a row
-3. Marathon Player — play 10 matches
-4. Perfect Ten — 10 total wins
+1. Water Badge — 3-win streak (+20 bonus points)
+2. Fire Badge — 5-win streak (+20 bonus points)
+3. Gold Badge — 7-win streak (+20 bonus points)
+4. Diamond Badge — 10-win streak (+20 bonus points)
+5. Platinum Badge — 15-win streak (+20 bonus points)
 
 **Endpoints:**
 - `GET /achievements` — all badges
@@ -195,6 +203,8 @@ A real-time multiplayer Web3 gaming platform where players compete in Rock-Paper
 **Files:**
 - `src/modules/achievement/` (AchievementService, AchievementController)
 - `prisma/seed.ts` (achievement seeds)
+- `src/modules/game/service/game.service.ts` (bonus point application)
+- `src/core/provider/web3.provider.ts` (badge NFT minting)
 
 ---
 
@@ -536,6 +546,12 @@ Complete frontend integration guide: [`FRONTEND_INTEGRATION.md`](./FRONTEND_INTE
 ## Known Issues & Limitations
 
 ### None — All Core Features Complete ✅
+
+**Recent fixes (July 13, 2026):**
+- ✅ Point calculation now matches SRS (10 base + 20 per badge bonus)
+- ✅ Achievement system now uses SRS-defined streak badges (Water, Fire, Gold, Diamond, Platinum)
+- ✅ Badge bonus points correctly applied after each match
+- ✅ All old achievements removed and replaced with SRS-compliant badges
 
 **Previous issues resolved:**
 - ✅ Friend game invite accept/decline socket listeners — implemented in `GameGateway`

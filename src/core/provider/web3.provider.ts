@@ -12,14 +12,13 @@ function loadAbi(contractName: string): ethers.InterfaceAbi {
 }
 
 // ─── Badge name → on-chain badge ID mapping ──────────────────────────────────
+// SRS-compliant streak-based achievement badges
 const BADGE_ID_MAP: Record<string, number> = {
-  'First Victory':   1,
-  'Ten Victories':   2,
-  'Fifty Victories': 3,
-  'On Fire':         4,
-  'Legendary':       5,
-  'Veteran':         6,
-  'Centurion':       7,
+  'Water Badge':    1,  // 3-win streak
+  'Fire Badge':     2,  // 5-win streak
+  'Gold Badge':     3,  // 7-win streak
+  'Diamond Badge':  4,  // 10-win streak
+  'Platinum Badge': 5,  // 15-win streak
 };
 
 @Injectable()

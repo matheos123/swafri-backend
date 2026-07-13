@@ -41,52 +41,42 @@ async function main() {
   console.log(`   Player → ${player.email} / Player@1234`);
 
   // ─── Achievement Badges ───────────────────────────────────────────────────
+  // SRS-compliant streak-based achievement system
+  // Each badge awards +20 bonus points on unlock
   // criteria format: "<field> <operator> <value>"
   // fields: wins | currentStreak | totalMatches
   // operators: >= | > | <= | < | ===
 
   const achievements = [
     {
-      name:        'First Victory',
-      description: 'Win your very first match.',
-      iconUrl:     'https://web3arena.com/badges/first-victory.png',
-      criteria:    'wins >= 1',
+      name:        'Water Badge',
+      description: 'Win 3 matches in a row. Bonus: +20 points',
+      iconUrl:     'https://web3arena.com/badges/water-badge.png',
+      criteria:    'currentStreak >= 3',
     },
     {
-      name:        'Ten Victories',
-      description: 'Win 10 matches.',
-      iconUrl:     'https://web3arena.com/badges/ten-victories.png',
-      criteria:    'wins >= 10',
-    },
-    {
-      name:        'Fifty Victories',
-      description: 'Win 50 matches.',
-      iconUrl:     'https://web3arena.com/badges/fifty-victories.png',
-      criteria:    'wins >= 50',
-    },
-    {
-      name:        'On Fire',
-      description: 'Win 5 matches in a row.',
-      iconUrl:     'https://web3arena.com/badges/on-fire.png',
+      name:        'Fire Badge',
+      description: 'Win 5 matches in a row. Bonus: +20 points',
+      iconUrl:     'https://web3arena.com/badges/fire-badge.png',
       criteria:    'currentStreak >= 5',
     },
     {
-      name:        'Legendary',
-      description: 'Win 10 matches in a row.',
-      iconUrl:     'https://web3arena.com/badges/legendary.png',
+      name:        'Gold Badge',
+      description: 'Win 7 matches in a row. Bonus: +20 points',
+      iconUrl:     'https://web3arena.com/badges/gold-badge.png',
+      criteria:    'currentStreak >= 7',
+    },
+    {
+      name:        'Diamond Badge',
+      description: 'Win 10 matches in a row. Bonus: +20 points',
+      iconUrl:     'https://web3arena.com/badges/diamond-badge.png',
       criteria:    'currentStreak >= 10',
     },
     {
-      name:        'Veteran',
-      description: 'Play 100 matches.',
-      iconUrl:     'https://web3arena.com/badges/veteran.png',
-      criteria:    'totalMatches >= 100',
-    },
-    {
-      name:        'Centurion',
-      description: 'Win 100 matches.',
-      iconUrl:     'https://web3arena.com/badges/centurion.png',
-      criteria:    'wins >= 100',
+      name:        'Platinum Badge',
+      description: 'Win 15 matches in a row. Bonus: +20 points',
+      iconUrl:     'https://web3arena.com/badges/platinum-badge.png',
+      criteria:    'currentStreak >= 15',
     },
   ];
 
