@@ -280,16 +280,33 @@ export class GameService {
     }
 
     // Check and award achievements for both players
-    const [p1Badges, p2Badges] = await Promise.all([
+    const [p1Result, p2Result] = await Promise.all([
       this.achievementSvc.checkAndAward(player1.userId),
       this.achievementSvc.checkAndAward(player2.userId),
     ]);
 
+    // Award bonus points for newly unlocked achievements (SRS: +20 per badge)
+    if (p1Result.bonusPoints > 0) {
+      await this.prisma.user.update({
+        where: { id: player1.userId },
+        data:  { points: { increment: p1Result.bonusPoints } },
+      });
+      this.logger.log(`Player ${player1.username} earned ${p1Result.bonusPoints} bonus points from ${p1Result.badges.length} badge(s)`);
+    }
+
+    if (p2Result.bonusPoints > 0) {
+      await this.prisma.user.update({
+        where: { id: player2.userId },
+        data:  { points: { increment: p2Result.bonusPoints } },
+      });
+      this.logger.log(`Player ${player2.username} earned ${p2Result.bonusPoints} bonus points from ${p2Result.badges.length} badge(s)`);
+    }
+
     // Notify players of new badges
-    for (const badge of p1Badges) {
+    for (const badge of p1Result.badges) {
       this.notificationSvc.broadcastAchievement(player1.socketId, badge);
     }
-    for (const badge of p2Badges) {
+    for (const badge of p2Result.badges) {
       this.notificationSvc.broadcastAchievement(player2.socketId, badge);
     }
 

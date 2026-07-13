@@ -29,11 +29,11 @@ export class AchievementService {
    *   1. Persist to DB (UserAchievement row)
    *   2. Fire-and-forget: mint ERC-1155 NFT on AchievementBadge.sol (only if user has a wallet)
    *
-   * @returns array of newly earned badge names
+   * @returns object with badge names and total bonus points earned (20 points per badge per SRS)
    */
-  async checkAndAward(userId: string): Promise<string[]> {
+  async checkAndAward(userId: string): Promise<{ badges: string[]; bonusPoints: number }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return [];
+    if (!user) return { badges: [], bonusPoints: 0 };
 
     const earned = new Set(
       (await this.prisma.userAchievement.findMany({ where: { userId }, select: { achievementId: true } }))
@@ -48,7 +48,7 @@ export class AchievementService {
         // Persist achievement in DB
         await this.prisma.userAchievement.create({ data: { userId, achievementId: a.id } });
         newlyEarned.push(a.name);
-        this.logger.log(`Achievement "${a.name}" unlocked for ${userId}`);
+        this.logger.log(`Achievement "${a.name}" unlocked for ${userId} — bonus: +20 points`);
 
         // Fire-and-forget: mint NFT on-chain (only for wallet-verified users)
         if (user.walletAddress && user.walletVerifiedAt) {
@@ -66,7 +66,10 @@ export class AchievementService {
       }
     }
 
-    return newlyEarned;
+    // SRS requirement: +20 points per achievement badge unlocked
+    const bonusPoints = newlyEarned.length * 20;
+
+    return { badges: newlyEarned, bonusPoints };
   }
 
   private evaluate(
