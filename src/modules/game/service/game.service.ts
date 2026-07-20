@@ -420,4 +420,12 @@ export class GameService {
         isRanked: r.isRanked,
       }));
   }
+
+  findActiveRoomByUserId(userId: string): GameRoom | undefined {
+    return Array.from(this.rooms.values()).find(
+      (r) =>
+        r.status === 'in_progress' &&
+        (r.player1.userId === userId || r.player2.userId === userId),
+    );
+  }
 }

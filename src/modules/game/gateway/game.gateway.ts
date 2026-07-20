@@ -178,6 +178,54 @@ export class GameGateway implements OnGatewayInit {
     client.emit('game:rooms', this.gameService.listActiveRooms());
   }
 
+  /**
+   * game:reconnect
+   * Handles client reconnection on page refresh/disconnect.
+   * Restores user socket to their active game room and emits full match state.
+   */
+  @SubscribeMessage('game:reconnect')
+  handleReconnect(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() raw: any,
+  ): void {
+    const data: { userId: string } =
+      typeof raw === 'string' ? JSON.parse(raw) :
+      Array.isArray(raw)      ? raw[0]          : raw;
+
+    const userId = data?.userId;
+    if (!userId) return;
+
+    const room = this.gameService.findActiveRoomByUserId(userId);
+    if (!room) return;
+
+    // Update socket ID for the reconnected player
+    if (room.player1.userId === userId) {
+      room.player1.socketId = client.id;
+    } else if (room.player2.userId === userId) {
+      room.player2.socketId = client.id;
+    }
+
+    client.join(room.roomId);
+
+    const isPlayer1 = room.player1.userId === userId;
+    const opponent = isPlayer1 ? room.player2 : room.player1;
+
+    this.logger.log(`Player ${userId} reconnected to room ${room.roomId}`);
+
+    client.emit('game:reconnected', {
+      roomId: room.roomId,
+      matchId: room.matchId,
+      isRanked: room.isRanked,
+      currentRound: room.currentRound,
+      player1Wins: room.player1Wins,
+      player2Wins: room.player2Wins,
+      opponent: {
+        userId: opponent.userId,
+        username: opponent.username,
+      },
+    });
+  }
+
   // ─── Friend Game Invite Response ──────────────────────────────────────────
 
   /**
