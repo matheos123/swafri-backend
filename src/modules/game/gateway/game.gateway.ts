@@ -142,6 +142,30 @@ export class GameGateway implements OnGatewayInit {
     }
   }
 
+  /**
+   * spectate:reaction
+   * Broadcast a floating reaction emoji from a spectator to all room listeners.
+   */
+  @SubscribeMessage('spectate:reaction')
+  handleSpectateReaction(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() raw: any,
+  ): void {
+    const data: { roomId: string; emoji: string; username?: string } =
+      typeof raw === 'string' ? JSON.parse(raw) :
+      Array.isArray(raw)      ? raw[0]          : raw;
+
+    const { roomId, emoji, username } = data;
+    if (!roomId || !emoji) return;
+
+    this.server.to(roomId).emit('spectate:reaction_received', {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      roomId,
+      emoji,
+      username: username || 'Spectator',
+    });
+  }
+
   // ─── Active Rooms ─────────────────────────────────────────────────────────
 
   /**
