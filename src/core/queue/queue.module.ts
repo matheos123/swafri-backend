@@ -11,13 +11,24 @@ import { EmailQueueProcessor } from './processors/email.processor';
   imports: [
     BullModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (config: ConfigService) => ({
-        connection: {
-          host: config.get<string>('redis.host'),
-          port: config.get<number>('redis.port'),
-          password: config.get<string>('redis.password'),
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const url = config.get<string>('redis.url');
+        if (url) {
+          return {
+            connection: {
+              url,
+              ...(url.startsWith('rediss://') ? { tls: {} } : {}),
+            },
+          };
+        }
+        return {
+          connection: {
+            host: config.get<string>('redis.host') ?? 'localhost',
+            port: config.get<number>('redis.port') ?? 6379,
+            password: config.get<string>('redis.password'),
+          },
+        };
+      },
       inject: [ConfigService],
     }),
     BullModule.registerQueue(

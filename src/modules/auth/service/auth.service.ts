@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ethers } from 'ethers';
+import * as crypto from 'crypto';
 import { AuthRepository } from '../repository/auth.repository';
 import { UserService } from '../../user/service/user.service';
 import { TokenService } from './token.service';
@@ -115,7 +116,7 @@ export class AuthService {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       };
-    } catch (err) {
+    } catch (err: any) {
       // Handle unique constraint violations from Prisma
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException('Duplicate field value entered');
@@ -324,7 +325,7 @@ export class AuthService {
     await this.redisService.del(`siwe:${normalizedAddress}`);
 
     // Check if wallet already has an account
-    let user = await this.userService.findByWalletAddress(address);
+    let user = await this.userService.findByWalletAddress(normalizedAddress);
 
     if (!user) {
       // Auto-register: generate a profile ID and username from the wallet address
@@ -332,22 +333,41 @@ export class AuthService {
         ethers.toUtf8Bytes(`${address}:${Date.now()}`),
       );
       const autoUsername = `Player_${address.slice(2, 8).toUpperCase()}`;
-      const randomPassword = ethers.hexlify(ethers.randomBytes(32));
+      const randomPassword = crypto.randomBytes(32).toString('hex');
       const hashedPassword  = await this.passwordService.hashPassword(randomPassword);
 
-      user = await this.userService.create({
-        email:               `${normalizedAddress}@wallet.local`,
-        username:            autoUsername,
-        password:            hashedPassword,
-        walletAddress:       normalizedAddress,
-        walletVerifiedAt:    new Date(),
-        blockchainProfileId,
-      });
+      try {
+        user = await this.userService.create({
+          email:               `${normalizedAddress}@wallet.local`,
+          username:            autoUsername,
+          password:            hashedPassword,
+          walletAddress:       normalizedAddress,
+          walletVerifiedAt:    new Date(),
+          blockchainProfileId,
+        });
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          // If username collided, try fallback unique username
+          const fallbackUsername = `Player_${address.slice(2, 8).toUpperCase()}_${Math.floor(1000 + Math.random() * 9000)}`;
+          try {
+            user = await this.userService.create({
+              email:               `${normalizedAddress}@wallet.local`,
+              username:            fallbackUsername,
+              password:            hashedPassword,
+              walletAddress:       normalizedAddress,
+              walletVerifiedAt:    new Date(),
+              blockchainProfileId,
+            });
+          } catch (retryErr) {
+            throw new ConflictException('This wallet address or username is already linked to another account.');
+          }
+        } else {
+          throw err;
+        }
+      }
     } else {
       // Existing user — refresh wallet verification timestamp
-      await this.userService.updateWalletVerified(user.id, normalizedAddress);
-      // Re-fetch to get updated fields
-      user = (await this.userService.findByWalletAddress(normalizedAddress))!;
+      user = await this.userService.updateWalletVerified(user.id, normalizedAddress);
     }
 
     const tokens = this.tokenService.generateTokenPair(user.id, user.email, user.role);
@@ -355,14 +375,17 @@ export class AuthService {
     await this.authRepository.setRefreshTokenHash(user.id, hashedRefreshToken);
 
     // Register player on-chain (fire-and-forget — does not block login)
-    // Only runs if the user has a blockchainProfileId and the contract is deployed
     if (user.blockchainProfileId) {
-      this.web3
-        .registerPlayerOnChain(user.blockchainProfileId, (user as any).username)
-        .then((txHash) =>
-          this.logger.log(`SIWE: Player ${user!.id} registered on-chain. TxHash: ${txHash}`),
-        )
-        .catch((err) => this.logger.error('SIWE: registerPlayerOnChain failed', err));
+      try {
+        this.web3
+          .registerPlayerOnChain(user.blockchainProfileId, (user as any).username)
+          .then((txHash) =>
+            this.logger.log(`SIWE: Player ${user!.id} registered on-chain. TxHash: ${txHash}`),
+          )
+          .catch((err) => this.logger.error('SIWE: registerPlayerOnChain failed', err));
+      } catch (err) {
+        this.logger.error('SIWE: registerPlayerOnChain sync error', err);
+      }
     }
 
     return {
